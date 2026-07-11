@@ -1,0 +1,72 @@
+# Sorting Hat
+
+A drop folder with opinions. Sorting Hat asks Apple's on-device `fm` model what a file is, then renames, Finder-tags, and files it using rules you write in plain English.
+
+- On-device by default: Apple's model on macOS 27, with local Ollama fallback on earlier versions.
+- Safe to tinker with: inspect every proposed action with `--dry-run`.
+- Yours to teach: the config is a few sentences, not a programming language.
+
+## Requirements
+
+- macOS 14 or later for the menu-bar app
+- macOS 27 plus Apple Intelligence for Apple's built-in `fm` model, or [Ollama](https://ollama.com/) with a local model on earlier macOS versions
+- Swift 6.2+ to build from source
+
+## Try it
+
+```sh
+swift build -c release
+.build/release/sorting-hat init
+mkdir -p ~/SortingHat/Inbox
+.build/release/sorting-hat once --dry-run
+.build/release/sorting-hat watch
+```
+
+## Menu-bar app
+
+Build and open the native companion with:
+
+```sh
+./script/build_and_run.sh
+```
+
+It watches automatically, shows recent filing activity, opens the Inbox and rules file, can pause or sort immediately, and uses macOS's native launch-at-login service. The dashboard appears at launch and the graduation-cap menu remains available for quick actions.
+
+Drag files into `~/SortingHat/Inbox`. Keep `sortinghat.conf` in the directory where you launch the command, or pass `--config /path/to/sortinghat.conf`.
+
+```yaml
+inbox: ~/SortingHat/Inbox
+settle_seconds: 2
+ollama_url: http://127.0.0.1:11434
+ollama_model: gemma3:4b
+openai_model:
+model_provider: automatic
+
+rules:
+  - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.
+  - Put receipts in Finance/Receipts/YYYY and tag them receipt and the merchant name.
+  - Put screenshots in Screenshots/YYYY-MM and tag them screenshot.
+  - Put everything else in Sorted/YYYY-MM and add one useful topic tag.
+```
+
+Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic prefers Apple's on-device `fm`, then local Ollama, then OpenAI. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`. Images may be sent to the selected provider; other files are classified from their filenames in this release.
+
+The model can suggest only a relative folder inside the inbox. Sorting Hat rejects absolute paths and traversal, creates destination folders, preserves existing files with numbered names, and writes tags as Finder metadata.
+
+## Commands
+
+```text
+sorting-hat init [--config PATH]
+sorting-hat once [--config PATH] [--dry-run]
+sorting-hat watch [--config PATH] [--dry-run]
+```
+
+`watch` intentionally uses a small polling loop in this first version. It is simple and reliable for a human-scale drop folder; a launch agent and event-driven watcher can come next.
+
+## Development
+
+```sh
+swift test
+```
+
+Inference is behind `FileAnalyzing`, so filesystem behavior and safety can be tested without a model. Provider selection prefers Apple `fm` when available and otherwise uses the configured local Ollama endpoint.

@@ -1,0 +1,170 @@
+import AppKit
+import Observation
+import ServiceManagement
+import SortingHatCore
+
+@MainActor @Observable
+final class HatStore {
+    var isWatching = false
+    var isProcessing = false
+    var status = "Ready"
+    var recent: [Activity] = []
+    var launchAtLogin = SMAppService.mainApp.status == .enabled
+    var quickActionInstalled = false
+    let inbox: URL
+    let configURL: URL
+    private var watchTask: Task<Void, Never>?
+
+    init() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        inbox = home.appending(path: "SortingHat/Inbox", directoryHint: .isDirectory)
+        configURL = home.appending(path: "SortingHat/sortinghat.conf")
+        quickActionInstalled = Self.quickActionURL.fileExists
+        bootstrap()
+        start()
+    }
+
+    func start() {
+        guard !isWatching else { return }
+        isWatching = true
+        status = "Watching Inbox"
+        watchTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.processNow()
+                try? await Task.sleep(for: .seconds(2))
+            }
+        }
+    }
+
+    func pause() {
+        watchTask?.cancel(); watchTask = nil
+        isWatching = false; status = "Paused"
+    }
+
+    func processNow() async {
+        guard !isProcessing else { return }
+        isProcessing = true
+        defer { isProcessing = false }
+        do {
+            let config = try ConfigLoader.load(configURL)
+            let analyzer = PreferredAnalyzer(fmExecutable: Self.fmPath(), ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
+                                             openAIModel: config.openAIModel, openAIKey: APIKeyStore.load(), provider: config.modelProvider)
+            let organizer = Organizer(inbox: inbox, rules: config.rules, analyzer: analyzer)
+            let files = try organizer.candidates()
+            if files.isEmpty { if isWatching { status = "Watching Inbox" }; return }
+            for file in files {
+                status = "Reading \(file.lastPathComponent)"
+                do {
+                    let move = try organizer.plan(file)
+                    try organizer.apply(move)
+                    recent.insert(Activity(name: move.destination.lastPathComponent, detail: move.reason, succeeded: true), at: 0)
+                } catch {
+                    recent.insert(Activity(name: file.lastPathComponent, detail: error.localizedDescription, succeeded: false), at: 0)
+                }
+                recent = Array(recent.prefix(20))
+            }
+            status = isWatching ? "Watching Inbox" : "Ready"
+        } catch { status = error.localizedDescription }
+    }
+
+    func openInbox() { NSWorkspace.shared.open(inbox) }
+    func loadRules() throws -> [String] { try ConfigLoader.load(configURL).rules }
+
+    func saveRules(_ rules: [String]) throws {
+        let cleaned = rules.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { throw HatError.invalidConfig("add at least one rule") }
+        guard cleaned.allSatisfy({ !$0.contains("\n") && !$0.contains("\r") }) else {
+            throw HatError.invalidConfig("each rule must fit on one line")
+        }
+        var config = try ConfigLoader.load(configURL)
+        config.rules = cleaned
+        try ConfigLoader.save(config, to: configURL)
+        status = isWatching ? "Watching Inbox" : "Rules Updated"
+    }
+
+    func loadModelSettings() throws -> (provider: ModelProvider, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
+        let config = try ConfigLoader.load(configURL)
+        return (config.modelProvider, config.ollamaURL, config.ollamaModel, config.openAIModel, APIKeyStore.load())
+    }
+
+    func saveModelSettings(provider: ModelProvider, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) throws {
+        guard URL(string: url) != nil else { throw HatError.invalidConfig("Ollama URL is not valid") }
+        var config = try ConfigLoader.load(configURL)
+        config.ollamaURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.ollamaModel = ollamaModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.openAIModel = openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.modelProvider = provider
+        try APIKeyStore.save(openAIKey.trimmingCharacters(in: .whitespacesAndNewlines))
+        try ConfigLoader.save(config, to: configURL)
+        status = "Model Settings Updated"
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            launchAtLogin = enabled
+        } catch { status = "Launch at login: \(error.localizedDescription)"; launchAtLogin = !enabled }
+    }
+
+    func installQuickAction() {
+        guard let script = Bundle.main.url(forResource: "install_quick_action", withExtension: "sh") else {
+            status = "Quick Action installer is missing from this build"
+            return
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [script.path]
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                status = "Quick Action installation failed"
+                return
+            }
+            quickActionInstalled = true
+            status = "Finder Quick Action Installed"
+        } catch {
+            status = "Quick Action: \(error.localizedDescription)"
+        }
+    }
+
+    private func bootstrap() {
+        try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        guard !FileManager.default.fileExists(atPath: configURL.path) else { return }
+        try? Self.example.write(to: configURL, atomically: true, encoding: .utf8)
+    }
+
+    private static func fmPath() -> String {
+        ["/usr/bin/fm", "/usr/local/bin/fm", "/opt/homebrew/bin/fm"].first(where: FileManager.default.isExecutableFile(atPath:)) ?? "/usr/bin/fm"
+    }
+
+    private static var quickActionURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library/Services/Send to Sorting Hat.workflow", directoryHint: .isDirectory)
+    }
+
+    private static let example = """
+    inbox: ~/SortingHat/Inbox
+    settle_seconds: 2
+    ollama_url: http://127.0.0.1:11434
+    ollama_model:
+    openai_model:
+    model_provider: automatic
+    rules:
+      - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.
+      - Put receipts in Finance/Receipts/YYYY and tag them receipt and the merchant name.
+      - Put screenshots in Screenshots/YYYY-MM and tag them screenshot.
+      - Put everything else in Sorted/YYYY-MM and add one useful topic tag.
+    """
+}
+
+private extension URL {
+    var fileExists: Bool { FileManager.default.fileExists(atPath: path) }
+}
+
+struct Activity: Identifiable {
+    let id = UUID()
+    let name: String
+    let detail: String
+    let succeeded: Bool
+}

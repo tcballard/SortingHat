@@ -1,0 +1,50 @@
+import Foundation
+
+public struct Configuration: Equatable, Sendable {
+    public var inbox: String = "~/SortingHat/Inbox"
+    public var rules: [String] = []
+    public var settleSeconds: Double = 2
+    public var ollamaURL: String = "http://127.0.0.1:11434"
+    public var ollamaModel: String = ""
+    public var openAIModel: String = ""
+    public var modelProvider: ModelProvider = .automatic
+}
+
+public enum ModelProvider: String, CaseIterable, Sendable {
+    case automatic, apple, ollama, openai
+}
+
+public struct Decision: Codable, Equatable, Sendable {
+    public let filename: String
+    public let folder: String
+    public let tags: [String]
+    public let reason: String
+    public init(filename: String, folder: String, tags: [String], reason: String) {
+        self.filename = filename; self.folder = folder; self.tags = tags; self.reason = reason
+    }
+}
+
+public struct PlannedMove: Equatable, Sendable {
+    public let source: URL
+    public let destination: URL
+    public let tags: [String]
+    public let reason: String
+}
+
+public enum HatError: Error, LocalizedError {
+    case invalidConfig(String)
+    case fmUnavailable
+    case invalidResponse(String)
+    case unsafePath(String)
+    case noModelProvider
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidConfig(let message): "Invalid config: \(message)"
+        case .fmUnavailable: "Apple's fm command was not found. It is included with macOS 27 or later."
+        case .invalidResponse(let response): "fm returned an invalid decision: \(response)"
+        case .unsafePath(let path): "Refusing unsafe path from model: \(path)"
+        case .noModelProvider: "Apple's fm requires macOS 27. Configure Ollama or OpenAI in Model Settings to sort on this Mac."
+        }
+    }
+}
