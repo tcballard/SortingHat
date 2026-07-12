@@ -2,6 +2,9 @@
 
 A drop folder with opinions. Sorting Hat asks Apple's on-device `fm` model what a file is, then renames, Finder-tags, and files it using rules you write in plain English.
 
+> [!WARNING]
+> The current `v0.1.0` build is an experimental pre-release. Its app bundle is ad-hoc signed, not signed with an Apple Developer ID, and it is not notarized. Gatekeeper may block the first launch; managed Macs may prohibit it entirely. Homebrew installation confirms the archive and cask are valid, but does not bypass these macOS security checks.
+
 - On-device by default: Apple's model on macOS 27, with local Ollama fallback on earlier versions.
 - Safe to tinker with: inspect every proposed action with `--dry-run`.
 - Yours to teach: the config is a few sentences, not a programming language.
@@ -23,6 +26,8 @@ mkdir -p ~/SortingHat/Inbox
 ```
 
 ## Menu-bar app
+
+The packaged app is currently intended for testing, not polished public distribution. If Gatekeeper blocks it, macOS may offer **System Settings → Privacy & Security → Open Anyway**. Only override Gatekeeper if you understand and accept the risk; the Finder Quick Action may produce additional trust prompts.
 
 Build and open the native companion with:
 
@@ -70,3 +75,7 @@ swift test
 ```
 
 Inference is behind `FileAnalyzing`, so filesystem behavior and safety can be tested without a model. Provider selection prefers Apple `fm` when available and otherwise uses the configured local Ollama endpoint.
+
+## Release status
+
+Release archives are currently ad-hoc signed and published as GitHub pre-releases. Before treating Sorting Hat as production-ready, releases must be signed with a **Developer ID Application** certificate using the hardened runtime, submitted to Apple for notarization, stapled, and validated with Gatekeeper. See [Apple's Gatekeeper guidance](https://support.apple.com/en-gb/102445) and [Apple's notarization documentation](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).

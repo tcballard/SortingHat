@@ -14,14 +14,26 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build app
         run: BUILD_CONFIGURATION=release ./script/build_and_run.sh package
-      - name: Sign app locally
+      # This provides bundle integrity only. It does not establish a trusted
+      # developer identity and is not a substitute for notarization.
+      - name: Ad-hoc sign experimental app
         run: codesign --force --deep --sign - "dist/Sorting Hat.app"
+      - name: Verify ad-hoc signature
+        run: |
+          codesign --verify --deep --strict --verbose=2 "dist/Sorting Hat.app"
+          authority="$(codesign -dvv "dist/Sorting Hat.app" 2>&1 | sed -n 's/^Signature=//p')"
+          test "$authority" = "adhoc"
       - name: Archive app
         run: ditto -c -k --sequesterRsrc --keepParent "dist/Sorting Hat.app" "Sorting-Hat-${GITHUB_REF_NAME}.zip"
-      - name: Publish release
+      - name: Publish experimental pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "Sorting-Hat-${GITHUB_REF_NAME}.zip" --generate-notes --title "Sorting Hat $GITHUB_REF_NAME"
+        run: |
+          gh release create "$GITHUB_REF_NAME" "Sorting-Hat-${GITHUB_REF_NAME}.zip" \
+            --prerelease \
+            --generate-notes \
+            --title "Sorting Hat $GITHUB_REF_NAME (experimental)" \
+            --notes "Experimental pre-release: this app is ad-hoc signed and not notarized. Gatekeeper may block its first launch, and managed Macs may prohibit it. Homebrew installation does not bypass these checks."
       - name: Calculate release checksum
         id: release
         run: |
