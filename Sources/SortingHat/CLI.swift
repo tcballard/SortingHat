@@ -27,7 +27,9 @@ enum SortingHatCLI {
             try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
             let analyzer = PreferredAnalyzer(fmExecutable: fmPath(), ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
                                              openAIModel: config.openAIModel, openAIKey: ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "",
-                                             provider: config.modelProvider)
+                                             provider: config.modelProvider, appleModel: config.appleModel,
+                                             appleUseCase: config.appleUseCase, appleGuardrails: config.appleGuardrails,
+                                             allowApplePCC: config.allowApplePCC)
             let organizer = Organizer(inbox: inbox, output: output, rules: config.rules, analyzer: analyzer)
             if command == "once" { try process(organizer, dryRun: dryRun) }
             else { try watch(organizer, interval: max(0.5, config.settleSeconds), dryRun: dryRun) }
@@ -82,6 +84,10 @@ enum SortingHatCLI {
     ollama_model:
     openai_model:
     model_provider: automatic
+    apple_model: automatic
+    apple_use_case: general
+    apple_guardrails: default
+    allow_apple_pcc: false
 
     rules:
       - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.

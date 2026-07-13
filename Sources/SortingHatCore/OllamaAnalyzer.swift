@@ -2,25 +2,40 @@ import Foundation
 
 public struct PreferredAnalyzer: FileAnalyzing {
     public let fm: FMAnalyzer
+    public let pcc: FMAnalyzer
     public let ollama: OllamaAnalyzer?
     public let openAI: OpenAIAnalyzer?
     public let provider: ModelProvider
+    public let appleModel: AppleModelSelection
+    public let allowApplePCC: Bool
 
-    public init(fmExecutable: String = "/usr/bin/fm", ollamaURL: String, ollamaModel: String, openAIModel: String = "", openAIKey: String = "", provider: ModelProvider = .automatic) {
-        fm = FMAnalyzer(executable: fmExecutable)
+    public init(
+        fmExecutable: String = "/usr/bin/fm",
+        ollamaURL: String,
+        ollamaModel: String,
+        openAIModel: String = "",
+        openAIKey: String = "",
+        provider: ModelProvider = .automatic,
+        appleModel: AppleModelSelection = .automatic,
+        appleUseCase: AppleUseCase = .general,
+        appleGuardrails: AppleGuardrails = .default,
+        allowApplePCC: Bool = false
+    ) {
+        fm = FMAnalyzer(executable: fmExecutable, model: .system, useCase: appleUseCase, guardrails: appleGuardrails)
+        pcc = FMAnalyzer(executable: fmExecutable, model: .pcc, useCase: appleUseCase, guardrails: appleGuardrails, pccAllowed: allowApplePCC)
         let model = ollamaModel.trimmingCharacters(in: .whitespacesAndNewlines)
         ollama = model.isEmpty ? nil : OllamaAnalyzer(baseURL: ollamaURL, model: model)
         let cloudModel = openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
         openAI = cloudModel.isEmpty || openAIKey.isEmpty ? nil : OpenAIAnalyzer(model: cloudModel, apiKey: openAIKey)
         self.provider = provider
+        self.appleModel = appleModel
+        self.allowApplePCC = allowApplePCC
     }
 
     public func analyze(file: URL, rules: [String]) throws -> Decision {
-        let hasApple = fm.isAvailable
         switch provider {
         case .apple:
-            guard hasApple else { throw HatError.fmUnavailable }
-            return try fm.analyze(file: file, rules: rules)
+            return try analyzeWithApple(file: file, rules: rules)
         case .ollama:
             guard let ollama else { throw HatError.invalidConfig("configure an Ollama model in Model Settings") }
             return try ollama.analyze(file: file, rules: rules)
@@ -28,10 +43,43 @@ public struct PreferredAnalyzer: FileAnalyzing {
             guard let openAI else { throw HatError.invalidConfig("configure an OpenAI model and API key in Model Settings") }
             return try openAI.analyze(file: file, rules: rules)
         case .automatic:
-            if hasApple { return try fm.analyze(file: file, rules: rules) }
+            if appleIsAvailable { return try analyzeWithApple(file: file, rules: rules) }
             if let ollama { return try ollama.analyze(file: file, rules: rules) }
             if let openAI { return try openAI.analyze(file: file, rules: rules) }
             throw HatError.noModelProvider
+        }
+    }
+
+    public static func shouldEscalateToPCC(after error: Error) -> Bool {
+        guard let error = error as? HatError else { return false }
+        return switch error {
+        case .fmUnavailable, .invalidResponse: true
+        default: false
+        }
+    }
+
+    private var appleIsAvailable: Bool {
+        switch appleModel {
+        case .system: fm.isAvailable
+        case .pcc: allowApplePCC && pcc.isAvailable
+        case .automatic: fm.isAvailable || (allowApplePCC && pcc.isAvailable)
+        }
+    }
+
+    private func analyzeWithApple(file: URL, rules: [String]) throws -> Decision {
+        switch appleModel {
+        case .system:
+            return try fm.analyze(file: file, rules: rules)
+        case .pcc:
+            guard allowApplePCC else { throw HatError.pccConsentRequired }
+            return try pcc.analyze(file: file, rules: rules)
+        case .automatic:
+            do {
+                return try fm.analyze(file: file, rules: rules)
+            } catch {
+                guard allowApplePCC, Self.shouldEscalateToPCC(after: error) else { throw error }
+                return try pcc.analyze(file: file, rules: rules)
+            }
         }
     }
 }

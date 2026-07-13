@@ -8,9 +8,23 @@ public protocol FileAnalyzing: Sendable {
 /// `fm` command-line interface.
 public struct FMAnalyzer: FileAnalyzing {
     public let executable: String
+    public let model: AppleModelSelection
+    public let useCase: AppleUseCase
+    public let guardrails: AppleGuardrails
+    public let pccAllowed: Bool
 
-    public init(executable: String = "/usr/bin/fm") {
+    public init(
+        executable: String = "/usr/bin/fm",
+        model: AppleModelSelection = .system,
+        useCase: AppleUseCase = .general,
+        guardrails: AppleGuardrails = .default,
+        pccAllowed: Bool = false
+    ) {
         self.executable = executable
+        self.model = model == .automatic ? .system : model
+        self.useCase = useCase
+        self.guardrails = guardrails
+        self.pccAllowed = pccAllowed
     }
 
     /// Checks that the system model is ready, rather than merely checking that
@@ -19,7 +33,7 @@ public struct FMAnalyzer: FileAnalyzing {
         guard FileManager.default.isExecutableFile(atPath: executable) else { return false }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = ["available", "--model", "system"]
+        process.arguments = ["available", "--model", model.rawValue]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         do {
@@ -32,7 +46,11 @@ public struct FMAnalyzer: FileAnalyzing {
     }
 
     public func analyze(file: URL, rules: [String]) throws -> Decision {
-        guard isAvailable else { throw HatError.fmUnavailable }
+        if model == .pcc, !pccAllowed { throw HatError.pccConsentRequired }
+        guard isAvailable else {
+            if model == .pcc { throw HatError.pccUnavailable("the service did not report as available") }
+            throw HatError.fmUnavailable
+        }
 
         let schemaURL = FileManager.default.temporaryDirectory
             .appending(path: "sorting-hat-\(UUID().uuidString).schema.json")
@@ -41,7 +59,14 @@ public struct FMAnalyzer: FileAnalyzing {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = try Self.commandArguments(file: file, rules: rules, schemaURL: schemaURL)
+        process.arguments = try Self.commandArguments(
+            file: file,
+            rules: rules,
+            schemaURL: schemaURL,
+            model: model,
+            useCase: useCase,
+            guardrails: guardrails
+        )
         let output = Pipe()
         let errors = Pipe()
         process.standardOutput = output
@@ -53,20 +78,34 @@ public struct FMAnalyzer: FileAnalyzing {
         if process.terminationStatus != 0 {
             let errorData = errors.fileHandleForReading.readDataToEndOfFile()
             let message = String(data: errorData, encoding: .utf8) ?? "unknown fm error"
-            throw HatError.invalidResponse(message.trimmingCharacters(in: .whitespacesAndNewlines))
+            let detail = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            if model == .pcc { throw Self.pccError(detail) }
+            throw HatError.invalidResponse(detail)
         }
         return try Self.decode(data)
     }
 
-    static func commandArguments(file: URL, rules: [String], schemaURL: URL) throws -> [String] {
+    static func commandArguments(
+        file: URL,
+        rules: [String],
+        schemaURL: URL,
+        model: AppleModelSelection = .system,
+        useCase: AppleUseCase = .general,
+        guardrails: AppleGuardrails = .default
+    ) throws -> [String] {
+        let resolvedModel = model == .automatic ? AppleModelSelection.system : model
         var arguments = [
             "respond",
-            "--model", "system",
+            "--model", resolvedModel.rawValue,
             "--instructions", Self.instructions,
             "--schema", schemaURL.path,
             "--no-stream",
             "--greedy",
         ]
+        if resolvedModel == .system {
+            if useCase != .general { arguments.append(contentsOf: ["--use-case", useCase.rawValue]) }
+            if guardrails != .default { arguments.append(contentsOf: ["--guardrails", guardrails.rawValue]) }
+        }
         let prompt = try Self.prompt(file: file, rules: rules)
         if Self.isImage(file) {
             arguments.append(contentsOf: ["--image", file.path, "--text", prompt])
@@ -85,6 +124,14 @@ public struct FMAnalyzer: FileAnalyzing {
         let json = Data(text[start...end].utf8)
         do { return try JSONDecoder().decode(Decision.self, from: json) }
         catch { throw HatError.invalidResponse(text) }
+    }
+
+    static func pccError(_ detail: String) -> HatError {
+        let normalized = detail.lowercased()
+        if normalized.contains("usage limit") || normalized.contains("rate limit") || normalized.contains("quota") {
+            return .pccLimitReached(detail)
+        }
+        return .pccUnavailable(detail)
     }
 
     private static let instructions = """

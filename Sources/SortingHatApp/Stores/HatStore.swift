@@ -50,7 +50,9 @@ final class HatStore {
             let configuredInbox = Self.expandedURL(config.inbox)
             let output = Self.expandedURL(config.output)
             let analyzer = PreferredAnalyzer(fmExecutable: Self.fmPath(), ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
-                                             openAIModel: config.openAIModel, openAIKey: APIKeyStore.load(), provider: config.modelProvider)
+                                             openAIModel: config.openAIModel, openAIKey: APIKeyStore.load(), provider: config.modelProvider,
+                                             appleModel: config.appleModel, appleUseCase: config.appleUseCase,
+                                             appleGuardrails: config.appleGuardrails, allowApplePCC: config.allowApplePCC)
             let organizer = Organizer(inbox: configuredInbox, output: output, rules: config.rules, analyzer: analyzer)
             let files = try organizer.candidates()
             if files.isEmpty { if isWatching { status = "Watching Inbox" }; return }
@@ -84,18 +86,26 @@ final class HatStore {
         status = isWatching ? "Watching Inbox" : "Rules Updated"
     }
 
-    func loadModelSettings() throws -> (provider: ModelProvider, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
+    func loadModelSettings() throws -> (provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase, appleGuardrails: AppleGuardrails, allowApplePCC: Bool, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
         let config = try ConfigLoader.load(configURL)
-        return (config.modelProvider, config.ollamaURL, config.ollamaModel, config.openAIModel, APIKeyStore.load())
+        return (config.modelProvider, config.appleModel, config.appleUseCase, config.appleGuardrails, config.allowApplePCC,
+                config.ollamaURL, config.ollamaModel, config.openAIModel, APIKeyStore.load())
     }
 
-    func saveModelSettings(provider: ModelProvider, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) throws {
+    func saveModelSettings(provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase,
+                           appleGuardrails: AppleGuardrails, allowApplePCC: Bool, url: String,
+                           ollamaModel: String, openAIModel: String, openAIKey: String) throws {
         guard URL(string: url) != nil else { throw HatError.invalidConfig("Ollama URL is not valid") }
+        if appleModel == .pcc, !allowApplePCC { throw HatError.pccConsentRequired }
         var config = try ConfigLoader.load(configURL)
         config.ollamaURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
         config.ollamaModel = ollamaModel.trimmingCharacters(in: .whitespacesAndNewlines)
         config.openAIModel = openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
         config.modelProvider = provider
+        config.appleModel = appleModel
+        config.appleUseCase = appleUseCase
+        config.appleGuardrails = appleGuardrails
+        config.allowApplePCC = allowApplePCC
         try APIKeyStore.save(openAIKey.trimmingCharacters(in: .whitespacesAndNewlines))
         try ConfigLoader.save(config, to: configURL)
         status = "Model Settings Updated"
@@ -157,6 +167,10 @@ final class HatStore {
     ollama_model:
     openai_model:
     model_provider: automatic
+    apple_model: automatic
+    apple_use_case: general
+    apple_guardrails: default
+    allow_apple_pcc: false
     rules:
       - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.
       - Put receipts in Receipts/YYYY and tag them receipt and the merchant name.

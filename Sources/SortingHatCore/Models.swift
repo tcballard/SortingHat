@@ -9,10 +9,30 @@ public struct Configuration: Equatable, Sendable {
     public var ollamaModel: String = ""
     public var openAIModel: String = ""
     public var modelProvider: ModelProvider = .automatic
+    public var appleModel: AppleModelSelection = .automatic
+    public var appleUseCase: AppleUseCase = .general
+    public var appleGuardrails: AppleGuardrails = .default
+    public var allowApplePCC = false
 }
 
 public enum ModelProvider: String, CaseIterable, Sendable {
     case automatic, apple, ollama, openai
+}
+
+public enum AppleModelSelection: String, CaseIterable, Sendable {
+    case automatic
+    case system
+    case pcc
+}
+
+public enum AppleUseCase: String, CaseIterable, Sendable {
+    case general
+    case contentTagging = "content-tagging"
+}
+
+public enum AppleGuardrails: String, CaseIterable, Sendable {
+    case `default`
+    case permissiveContentTransformations = "permissive-content-transformations"
 }
 
 public struct Decision: Codable, Equatable, Sendable {
@@ -35,6 +55,9 @@ public struct PlannedMove: Equatable, Sendable {
 public enum HatError: Error, LocalizedError {
     case invalidConfig(String)
     case fmUnavailable
+    case pccConsentRequired
+    case pccUnavailable(String)
+    case pccLimitReached(String)
     case invalidResponse(String)
     case invalidDecision(String)
     case contentExtractionFailed(String)
@@ -45,6 +68,9 @@ public enum HatError: Error, LocalizedError {
         switch self {
         case .invalidConfig(let message): "Invalid config: \(message)"
         case .fmUnavailable: "Apple's on-device Foundation Model is unavailable. It requires macOS 27, Apple Intelligence, and a downloaded system model."
+        case .pccConsentRequired: "Private Cloud Compute requires explicit permission in Model Settings before files can be sent to Apple."
+        case .pccUnavailable(let message): "Apple Private Cloud Compute is unavailable: \(message)"
+        case .pccLimitReached(let message): "Apple Private Cloud Compute usage limit was reached: \(message)"
         case .invalidResponse(let response): "fm returned an invalid decision: \(response)"
         case .invalidDecision(let message): "Invalid sorting decision: \(message)"
         case .contentExtractionFailed(let message): "Could not read file content: \(message)"
