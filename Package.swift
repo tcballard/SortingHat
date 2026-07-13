@@ -12,6 +12,10 @@ let package = Package(
         .target(name: "SortingHatCore"),
         .executableTarget(name: "SortingHat", dependencies: ["SortingHatCore"]),
         .executableTarget(name: "SortingHatApp", dependencies: ["SortingHatCore"]),
-        .testTarget(name: "SortingHatTests", dependencies: ["SortingHatCore"]),
+        .testTarget(
+            name: "SortingHatTests",
+            dependencies: ["SortingHatCore"],
+            resources: [.process("Fixtures")]
+        ),
     ]
 )

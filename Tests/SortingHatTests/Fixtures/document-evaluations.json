@@ -1,0 +1,28 @@
+[
+  {
+    "sourceFilename": "scan-0042.txt",
+    "contents": "TESCO STORES LTD\n12 July 2026\nTOTAL GBP 42.18\nThank you for shopping with us",
+    "decision": {
+      "filename": "2026-07-12-tesco-42-18.txt",
+      "folder": "Receipts/2026",
+      "tags": ["receipt", "tesco"],
+      "reason": "Tesco receipt dated 12 July 2026"
+    },
+    "expectedText": ["TESCO", "42.18"],
+    "expectedFolder": "Receipts/2026",
+    "expectedFilename": "2026-07-12-tesco-42-18.txt"
+  },
+  {
+    "sourceFilename": "document-final.txt",
+    "contents": "Project Aurora launch plan\nOwner: Casey\nLaunch date: 30 September 2026",
+    "decision": {
+      "filename": "project-aurora-launch-plan.txt",
+      "folder": "Projects/Aurora",
+      "tags": ["project-aurora", "launch-plan"],
+      "reason": "Launch plan for Project Aurora"
+    },
+    "expectedText": ["Project Aurora", "30 September 2026"],
+    "expectedFolder": "Projects/Aurora",
+    "expectedFilename": "project-aurora-launch-plan.txt"
+  }
+]

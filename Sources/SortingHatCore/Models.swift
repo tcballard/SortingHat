@@ -36,6 +36,7 @@ public enum HatError: Error, LocalizedError {
     case invalidConfig(String)
     case fmUnavailable
     case invalidResponse(String)
+    case invalidDecision(String)
     case unsafePath(String)
     case noModelProvider
 
@@ -44,6 +45,7 @@ public enum HatError: Error, LocalizedError {
         case .invalidConfig(let message): "Invalid config: \(message)"
         case .fmUnavailable: "Apple's on-device Foundation Model is unavailable. It requires macOS 27, Apple Intelligence, and a downloaded system model."
         case .invalidResponse(let response): "fm returned an invalid decision: \(response)"
+        case .invalidDecision(let message): "Invalid sorting decision: \(message)"
         case .unsafePath(let path): "Refusing unsafe path from model: \(path)"
         case .noModelProvider: "Apple's on-device Foundation Model is unavailable. Configure Ollama or OpenAI in Model Settings to sort on this Mac."
         }
