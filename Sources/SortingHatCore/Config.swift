@@ -24,6 +24,7 @@ public enum ConfigLoader {
             let value = String(line[line.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
             switch key {
             case "inbox": config.inbox = value
+            case "output": config.output = value
             case "settle_seconds":
                 guard let seconds = Double(value), seconds >= 0 else {
                     throw HatError.invalidConfig("settle_seconds must be zero or greater")
@@ -48,6 +49,7 @@ public enum ConfigLoader {
         let rules = config.rules.map { "  - \($0)" }.joined(separator: "\n")
         let text = """
         inbox: \(config.inbox)
+        output: \(config.output)
         settle_seconds: \(config.settleSeconds.formatted(.number.precision(.fractionLength(0...3))))
         ollama_url: \(config.ollamaURL)
         ollama_model: \(config.ollamaModel)

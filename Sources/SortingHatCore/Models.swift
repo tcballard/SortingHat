@@ -2,6 +2,7 @@ import Foundation
 
 public struct Configuration: Equatable, Sendable {
     public var inbox: String = "~/SortingHat/Inbox"
+    public var output: String = "~/SortingHat"
     public var rules: [String] = []
     public var settleSeconds: Double = 2
     public var ollamaURL: String = "http://127.0.0.1:11434"

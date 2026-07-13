@@ -88,7 +88,7 @@ public struct FMAnalyzer: FileAnalyzing {
     }
 
     private static let instructions = """
-    You organize one file at a time according to the person's rules. Choose a safe relative destination folder, a descriptive filename, useful Finder tags, and a concise reason. Never use an absolute path, a tilde, or dot/dot-dot path components. Preserve an appropriate file extension.
+    You organize one file at a time according to the person's rules. Always replace the original filename with a short, descriptive filename; never return it unchanged. Choose the most specific rule-matching folder (for example, receipts belong in Receipts), not a generic Sorted folder. The folder is relative to the configured output directory. Choose useful Finder tags and a concise reason. Never use an absolute path, a tilde, or dot/dot-dot path components. Preserve an appropriate file extension.
     """
 
     private static func prompt(file: URL, rules: [String]) -> String {

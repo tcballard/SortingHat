@@ -23,11 +23,12 @@ enum SortingHatCLI {
         case "once", "watch":
             let config = try ConfigLoader.load(URL(fileURLWithPath: configPath))
             let inbox = URL(fileURLWithPath: NSString(string: config.inbox).expandingTildeInPath).standardizedFileURL
+            let output = URL(fileURLWithPath: NSString(string: config.output).expandingTildeInPath).standardizedFileURL
             try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
             let analyzer = PreferredAnalyzer(fmExecutable: fmPath(), ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
                                              openAIModel: config.openAIModel, openAIKey: ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "",
                                              provider: config.modelProvider)
-            let organizer = Organizer(inbox: inbox, rules: config.rules, analyzer: analyzer)
+            let organizer = Organizer(inbox: inbox, output: output, rules: config.rules, analyzer: analyzer)
             if command == "once" { try process(organizer, dryRun: dryRun) }
             else { try watch(organizer, interval: max(0.5, config.settleSeconds), dryRun: dryRun) }
         case "help", "--help", "-h": printHelp()
@@ -75,6 +76,7 @@ enum SortingHatCLI {
     static let example = """
     # Sorting Hat — write rules the way you'd explain them to a colleague.
     inbox: ~/SortingHat/Inbox
+    output: ~/SortingHat
     settle_seconds: 2
     ollama_url: http://127.0.0.1:11434
     ollama_model:
@@ -83,9 +85,9 @@ enum SortingHatCLI {
 
     rules:
       - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.
-      - Put receipts in Finance/Receipts/YYYY and tag them receipt and the merchant name.
+      - Put receipts in Receipts/YYYY and tag them receipt and the merchant name.
       - Put screenshots in Screenshots/YYYY-MM and tag them screenshot.
-      - Put everything else in Sorted/YYYY-MM and add one useful topic tag.
+      - Put everything else in Files/YYYY-MM and add one useful topic tag.
     """
 
     static func printHelp() {

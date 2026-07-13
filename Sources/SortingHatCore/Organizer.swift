@@ -2,11 +2,14 @@ import Foundation
 
 public struct Organizer {
     public let inbox: URL
+    public let output: URL
     public let rules: [String]
     public let analyzer: any FileAnalyzing
     public var fileManager = FileManager.default
-    public init(inbox: URL, rules: [String], analyzer: any FileAnalyzing, fileManager: FileManager = .default) {
-        self.inbox = inbox; self.rules = rules; self.analyzer = analyzer; self.fileManager = fileManager
+    public init(inbox: URL, output: URL? = nil, rules: [String], analyzer: any FileAnalyzing, fileManager: FileManager = .default) {
+        self.inbox = inbox
+        self.output = output ?? inbox.deletingLastPathComponent()
+        self.rules = rules; self.analyzer = analyzer; self.fileManager = fileManager
     }
 
     public func candidates() throws -> [URL] {
@@ -24,7 +27,7 @@ public struct Organizer {
         let decision = try analyzer.analyze(file: file, rules: rules)
         let filename = try Self.safeComponent(decision.filename, label: "filename")
         let folder = try Self.safeFolder(decision.folder)
-        var destination = inbox.appending(path: folder, directoryHint: .isDirectory).appending(path: filename)
+        var destination = output.appending(path: folder, directoryHint: .isDirectory).appending(path: filename)
         destination = available(destination, excluding: file)
         return PlannedMove(source: file, destination: destination, tags: decision.tags, reason: decision.reason)
     }

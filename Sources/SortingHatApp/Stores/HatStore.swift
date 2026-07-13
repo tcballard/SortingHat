@@ -47,9 +47,11 @@ final class HatStore {
         defer { isProcessing = false }
         do {
             let config = try ConfigLoader.load(configURL)
+            let configuredInbox = Self.expandedURL(config.inbox)
+            let output = Self.expandedURL(config.output)
             let analyzer = PreferredAnalyzer(fmExecutable: Self.fmPath(), ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
                                              openAIModel: config.openAIModel, openAIKey: APIKeyStore.load(), provider: config.modelProvider)
-            let organizer = Organizer(inbox: inbox, rules: config.rules, analyzer: analyzer)
+            let organizer = Organizer(inbox: configuredInbox, output: output, rules: config.rules, analyzer: analyzer)
             let files = try organizer.candidates()
             if files.isEmpty { if isWatching { status = "Watching Inbox" }; return }
             for file in files {
@@ -138,6 +140,10 @@ final class HatStore {
         ["/usr/bin/fm", "/usr/local/bin/fm", "/opt/homebrew/bin/fm"].first(where: FileManager.default.isExecutableFile(atPath:)) ?? "/usr/bin/fm"
     }
 
+    private static func expandedURL(_ path: String) -> URL {
+        URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL
+    }
+
     private static var quickActionURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appending(path: "Library/Services/Send to Sorting Hat.workflow", directoryHint: .isDirectory)
@@ -145,6 +151,7 @@ final class HatStore {
 
     private static let example = """
     inbox: ~/SortingHat/Inbox
+    output: ~/SortingHat
     settle_seconds: 2
     ollama_url: http://127.0.0.1:11434
     ollama_model:
@@ -152,9 +159,9 @@ final class HatStore {
     model_provider: automatic
     rules:
       - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.
-      - Put receipts in Finance/Receipts/YYYY and tag them receipt and the merchant name.
+      - Put receipts in Receipts/YYYY and tag them receipt and the merchant name.
       - Put screenshots in Screenshots/YYYY-MM and tag them screenshot.
-      - Put everything else in Sorted/YYYY-MM and add one useful topic tag.
+      - Put everything else in Files/YYYY-MM and add one useful topic tag.
     """
 }
 
