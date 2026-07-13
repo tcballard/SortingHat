@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PreferredAnalyzer: FileAnalyzing {
+public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
     public let fm: FMAnalyzer
     public let pcc: FMAnalyzer
     public let ollama: OllamaAnalyzer?
@@ -50,6 +50,20 @@ public struct PreferredAnalyzer: FileAnalyzing {
         }
     }
 
+    public func analyzeBatch(files: [BatchFileInput], rules: [String]) -> [BatchAnalysisOutcome] {
+        switch provider {
+        case .apple:
+            return analyzeBatchWithApple(files: files, rules: rules)
+        case .automatic where appleIsAvailable:
+            return analyzeBatchWithApple(files: files, rules: rules)
+        default:
+            return files.map { input in
+                do { return .decision(sourceID: input.id, try analyze(file: input.file, rules: rules)) }
+                catch { return .failure(sourceID: input.id, Self.hatError(error)) }
+            }
+        }
+    }
+
     public static func shouldEscalateToPCC(after error: Error) -> Bool {
         guard let error = error as? HatError else { return false }
         return switch error {
@@ -81,6 +95,45 @@ public struct PreferredAnalyzer: FileAnalyzing {
                 return try pcc.analyze(file: file, rules: rules)
             }
         }
+    }
+
+    private func analyzeBatchWithApple(files: [BatchFileInput], rules: [String]) -> [BatchAnalysisOutcome] {
+        switch appleModel {
+        case .system:
+            return fm.analyzeBatch(files: files, rules: rules)
+        case .pcc:
+            guard allowApplePCC else { return files.map { .failure(sourceID: $0.id, .pccConsentRequired) } }
+            return pcc.analyzeBatch(files: files, rules: rules)
+        case .automatic:
+            let local = fm.analyzeBatch(files: files, rules: rules)
+            guard allowApplePCC else { return local }
+            let inputByID = Dictionary(uniqueKeysWithValues: files.map { ($0.id, $0) })
+            let retryInputs = local.compactMap { outcome -> BatchFileInput? in
+                guard case .failure(let sourceID, let error) = outcome,
+                      Self.shouldEscalateToPCC(after: error) else { return nil }
+                return inputByID[sourceID]
+            }
+            guard !retryInputs.isEmpty else { return local }
+            let cloud = pcc.analyzeBatch(files: retryInputs, rules: rules)
+            let cloudByID = Dictionary(uniqueKeysWithValues: cloud.map { outcome in
+                let id: String
+                switch outcome {
+                case .decision(let sourceID, _), .failure(let sourceID, _): id = sourceID
+                }
+                return (id, outcome)
+            })
+            return local.map { outcome in
+                let id: String
+                switch outcome {
+                case .decision(let sourceID, _), .failure(let sourceID, _): id = sourceID
+                }
+                return cloudByID[id] ?? outcome
+            }
+        }
+    }
+
+    private static func hatError(_ error: Error) -> HatError {
+        error as? HatError ?? .invalidResponse(error.localizedDescription)
     }
 }
 

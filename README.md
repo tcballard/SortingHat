@@ -65,6 +65,8 @@ For the on-device system model, `apple_use_case: content-tagging` opts into the 
 
 Sorting Hat reads searchable PDFs, plain-text formats, RTF, Word, and OpenDocument files. For scanned PDFs and receipt images, it uses Apple's local Vision framework to recognize text before asking the selected model to name and file the document. Embedded PDF text is preferred, so searchable PDFs avoid unnecessary OCR. Extraction is limited to the first 5 pages and 12,000 characters; the source file is never modified. If a scanned PDF cannot be rendered or contains no sufficiently confident text, Sorting Hat leaves it in the Inbox and reports the extraction failure.
 
+When Apple `fm` is selected, compatible non-image files are analyzed in batches of at most 8 files and 24,000 extracted characters. Each file is identified by an opaque request-local ID, and every returned decision is independently validated before any move. Missing, duplicate, unexpected, or unsafe decisions cannot be applied. Images remain on the individual multimodal path, and a failed batch does not prevent files in other batches from being processed. A deterministic process benchmark verifies that 8 compatible files use 1 `fm respond` invocation instead of 8.
+
 The Inbox is intake-only. Sorting Hat renames each file and moves it to a rule-specific folder under `output` (for example, `~/SortingHat/Receipts/2026`). It creates those destination folders as needed, rejects absolute paths and traversal, preserves existing files with numbered names, and writes tags as Finder metadata.
 
 If a model returns the uploaded filename unchanged, Sorting Hat leaves the source in the Inbox and reports an invalid sorting decision instead of silently skipping the requested rename.

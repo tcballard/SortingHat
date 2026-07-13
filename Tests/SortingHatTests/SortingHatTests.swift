@@ -17,6 +17,18 @@ struct OCRRequiringAnalyzer: FileAnalyzing {
     }
 }
 
+struct StubBatchAnalyzer: BatchFileAnalyzing {
+    let outcomes: [BatchAnalysisOutcome]
+
+    func analyze(file: URL, rules: [String]) throws -> Decision {
+        Decision(filename: "single-\(file.lastPathComponent)", folder: "Singles", tags: [], reason: "single")
+    }
+
+    func analyzeBatch(files: [BatchFileInput], rules: [String]) -> [BatchAnalysisOutcome] {
+        outcomes
+    }
+}
+
 private struct DocumentEvaluation: Decodable {
     let sourceFilename: String
     let contents: String
@@ -76,6 +88,25 @@ private func writeScannedPDF(_ images: [CGImage], to file: URL) throws {
 private func containsOption(_ option: String, value: String, in arguments: [String]) -> Bool {
     guard let index = arguments.firstIndex(of: option), arguments.indices.contains(index + 1) else { return false }
     return arguments[index + 1] == value
+}
+
+private func fakeFMExecutable(counter: URL) throws -> URL {
+    let executable = FileManager.default.temporaryDirectory.appending(path: "fake-fm-\(UUID().uuidString)")
+    let batchDecisions = (1...8).map { index in
+        "{\"source_id\":\"file-\(index)\",\"filename\":\"renamed-\(index).txt\",\"folder\":\"Notes\",\"tags\":[],\"reason\":\"batched\"}"
+    }.joined(separator: ",")
+    let script = """
+    #!/bin/sh
+    if [ "$1" = "available" ]; then exit 0; fi
+    echo respond >> "\(counter.path)"
+    case "$*" in
+      *batch-schema*) printf '%s' '{"decisions":[\(batchDecisions)]}' ;;
+      *) printf '%s' '{"filename":"renamed.txt","folder":"Notes","tags":[],"reason":"individual"}' ;;
+    esac
+    """
+    try script.write(to: executable, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+    return executable
 }
 
 @Suite(.serialized)
@@ -193,6 +224,76 @@ struct SortingHatTests {
         let unavailable = FMAnalyzer.pccError("Service temporarily unavailable")
         #expect(limit.localizedDescription.contains("usage limit was reached"))
         #expect(unavailable.localizedDescription.contains("is unavailable"))
+    }
+
+    @Test func partitionsBatchesByFileAndCharacterLimits() {
+        let byCount = FMAnalyzer.batchRanges(characterCounts: Array(repeating: 100, count: 9))
+        #expect(byCount.map(\.count) == [8, 1])
+        let byCharacters = FMAnalyzer.batchRanges(characterCounts: [12_001, 12_001, 100])
+        #expect(byCharacters.map(\.count) == [1, 2])
+    }
+
+    @Test func keepsImagesOnIndividualMultimodalPath() {
+        #expect(!FMAnalyzer.supportsBatch(URL(fileURLWithPath: "/tmp/receipt.png")))
+        #expect(FMAnalyzer.supportsBatch(URL(fileURLWithPath: "/tmp/receipt.pdf")))
+        #expect(FMAnalyzer.supportsBatch(URL(fileURLWithPath: "/tmp/notes.txt")))
+    }
+
+    @Test func independentlyValidatesBatchDecisionsAndMissingResults() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let files = ["one.txt", "two.txt", "three.txt"].map { root.appending(path: $0) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for file in files { FileManager.default.createFile(atPath: file.path, contents: Data()) }
+        let analyzer = StubBatchAnalyzer(outcomes: [
+            .decision(sourceID: "file-1", Decision(filename: "first-note.txt", folder: "Notes", tags: [], reason: "valid")),
+            .decision(sourceID: "file-2", Decision(filename: "second-note.txt", folder: "../Escape", tags: [], reason: "unsafe")),
+        ])
+        let outcomes = Organizer(inbox: root, rules: ["File notes"], analyzer: analyzer).planAll(files)
+        guard case .success = outcomes[0] else { Issue.record("Expected first batch item to succeed"); return }
+        guard case .failure(_, let unsafeError) = outcomes[1] else { Issue.record("Expected unsafe item to fail"); return }
+        guard case .failure(_, let missingError) = outcomes[2] else { Issue.record("Expected missing item to fail"); return }
+        #expect(unsafeError is HatError)
+        #expect(missingError.localizedDescription.contains("missing result"))
+    }
+
+    @Test func rejectsDuplicateBatchResultsButKeepsOtherValidItems() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let files = ["one.txt", "two.txt"].map { root.appending(path: $0) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for file in files { FileManager.default.createFile(atPath: file.path, contents: Data()) }
+        let duplicate = Decision(filename: "first-note.txt", folder: "Notes", tags: [], reason: "duplicate")
+        let analyzer = StubBatchAnalyzer(outcomes: [
+            .decision(sourceID: "file-1", duplicate),
+            .decision(sourceID: "file-1", duplicate),
+            .decision(sourceID: "unexpected", duplicate),
+            .decision(sourceID: "file-2", Decision(filename: "second-note.txt", folder: "Notes", tags: [], reason: "valid")),
+        ])
+        let outcomes = Organizer(inbox: root, rules: ["File notes"], analyzer: analyzer).planAll(files)
+        guard case .failure(_, let duplicateError) = outcomes[0] else { Issue.record("Expected duplicate item to fail"); return }
+        guard case .success = outcomes[1] else { Issue.record("Expected independent valid item to succeed"); return }
+        #expect(duplicateError.localizedDescription.contains("duplicate results"))
+    }
+
+    @Test func batchesEightFilesIntoOneFMResponse() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let counter = root.appending(path: "respond-count.txt")
+        let executable = try fakeFMExecutable(counter: counter)
+        let files = try (1...8).map { index -> BatchFileInput in
+            let file = root.appending(path: "source-\(index).txt")
+            try "Short note \(index)".write(to: file, atomically: true, encoding: .utf8)
+            return BatchFileInput(id: "file-\(index)", file: file)
+        }
+        let analyzer = FMAnalyzer(executable: executable.path)
+        let batchOutcomes = analyzer.analyzeBatch(files: files, rules: ["File notes"])
+        let batchCalls = (try String(contentsOf: counter, encoding: .utf8)).split(separator: "\n").count
+        #expect(batchOutcomes.count == 8)
+        #expect(batchCalls == 1)
+
+        try "".write(to: counter, atomically: true, encoding: .utf8)
+        for input in files { _ = try analyzer.analyze(file: input.file, rules: ["File notes"]) }
+        let individualCalls = (try String(contentsOf: counter, encoding: .utf8)).split(separator: "\n").count
+        #expect(individualCalls == 8)
     }
 
     @Test func plansCollisionSafeMove() throws {

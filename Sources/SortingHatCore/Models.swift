@@ -52,7 +52,7 @@ public struct PlannedMove: Equatable, Sendable {
     public let reason: String
 }
 
-public enum HatError: Error, LocalizedError {
+public enum HatError: Error, LocalizedError, Sendable {
     case invalidConfig(String)
     case fmUnavailable
     case pccConsentRequired
@@ -63,6 +63,7 @@ public enum HatError: Error, LocalizedError {
     case contentExtractionFailed(String)
     case unsafePath(String)
     case noModelProvider
+    case invalidBatch(String)
 
     public var errorDescription: String? {
         switch self {
@@ -76,6 +77,7 @@ public enum HatError: Error, LocalizedError {
         case .contentExtractionFailed(let message): "Could not read file content: \(message)"
         case .unsafePath(let path): "Refusing unsafe path from model: \(path)"
         case .noModelProvider: "Apple's on-device Foundation Model is unavailable. Configure Ollama or OpenAI in Model Settings to sort on this Mac."
+        case .invalidBatch(let message): "Invalid batch decision: \(message)"
         }
     }
 }

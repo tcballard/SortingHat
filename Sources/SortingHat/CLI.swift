@@ -39,14 +39,19 @@ enum SortingHatCLI {
     }
 
     static func process(_ organizer: Organizer, dryRun: Bool) throws {
-        for file in try organizer.candidates() {
-            do {
-                let move = try organizer.plan(file)
-                print("\(dryRun ? "Would file" : "Filing") \(file.lastPathComponent) → \(move.destination.path) [\(move.tags.joined(separator: ", "))]")
+        for outcome in organizer.planAll(try organizer.candidates()) {
+            switch outcome {
+            case .success(let move):
+                print("\(dryRun ? "Would file" : "Filing") \(move.source.lastPathComponent) → \(move.destination.path) [\(move.tags.joined(separator: ", "))]")
                 print("  \(move.reason)")
-                if !dryRun { try organizer.apply(move) }
-            } catch {
-                FileHandle.standardError.write(Data("Skipped \(file.lastPathComponent): \(error.localizedDescription)\n".utf8))
+                if !dryRun {
+                    do { try organizer.apply(move) }
+                    catch {
+                        FileHandle.standardError.write(Data("Skipped \(move.source.lastPathComponent): \(error.localizedDescription)\n".utf8))
+                    }
+                }
+            case .failure(let source, let error):
+                FileHandle.standardError.write(Data("Skipped \(source.lastPathComponent): \(error.localizedDescription)\n".utf8))
             }
         }
     }

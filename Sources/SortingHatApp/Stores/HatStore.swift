@@ -56,14 +56,18 @@ final class HatStore {
             let organizer = Organizer(inbox: configuredInbox, output: output, rules: config.rules, analyzer: analyzer)
             let files = try organizer.candidates()
             if files.isEmpty { if isWatching { status = "Watching Inbox" }; return }
-            for file in files {
-                status = "Reading \(file.lastPathComponent)"
-                do {
-                    let move = try organizer.plan(file)
-                    try organizer.apply(move)
-                    recent.insert(Activity(name: move.destination.lastPathComponent, detail: move.reason, succeeded: true), at: 0)
-                } catch {
-                    recent.insert(Activity(name: file.lastPathComponent, detail: error.localizedDescription, succeeded: false), at: 0)
+            status = "Reading \(files.count) file\(files.count == 1 ? "" : "s")"
+            for outcome in organizer.planAll(files) {
+                switch outcome {
+                case .success(let move):
+                    do {
+                        try organizer.apply(move)
+                        recent.insert(Activity(name: move.destination.lastPathComponent, detail: move.reason, succeeded: true), at: 0)
+                    } catch {
+                        recent.insert(Activity(name: move.source.lastPathComponent, detail: error.localizedDescription, succeeded: false), at: 0)
+                    }
+                case .failure(let source, let error):
+                    recent.insert(Activity(name: source.lastPathComponent, detail: error.localizedDescription, succeeded: false), at: 0)
                 }
                 recent = Array(recent.prefix(20))
             }
