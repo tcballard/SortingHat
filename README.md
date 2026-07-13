@@ -55,7 +55,9 @@ rules:
   - Put everything else in Files/YYYY-MM and add one useful topic tag.
 ```
 
-Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic first checks whether Apple's on-device system model is ready, then falls back to local Ollama and OpenAI. Apple requests use guided JSON output, deterministic generation, and native multimodal input for supported images. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`. Sorting Hat also extracts bounded local text from searchable PDFs, plain-text formats, RTF, Word, and OpenDocument files so receipts and documents can be named and filed from their contents.
+Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic first checks whether Apple's on-device system model is ready, then falls back to local Ollama and OpenAI. Apple requests use guided JSON output, deterministic generation, and native multimodal input for supported images. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`.
+
+Sorting Hat reads searchable PDFs, plain-text formats, RTF, Word, and OpenDocument files. For scanned PDFs and receipt images, it uses Apple's local Vision framework to recognize text before asking the selected model to name and file the document. Embedded PDF text is preferred, so searchable PDFs avoid unnecessary OCR. Extraction is limited to the first 5 pages and 12,000 characters; the source file is never modified. If a scanned PDF cannot be rendered or contains no sufficiently confident text, Sorting Hat leaves it in the Inbox and reports the extraction failure.
 
 The Inbox is intake-only. Sorting Hat renames each file and moves it to a rule-specific folder under `output` (for example, `~/SortingHat/Receipts/2026`). It creates those destination folders as needed, rejects absolute paths and traversal, preserves existing files with numbered names, and writes tags as Finder metadata.
 
