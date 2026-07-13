@@ -16,7 +16,7 @@ public struct PreferredAnalyzer: FileAnalyzing {
     }
 
     public func analyze(file: URL, rules: [String]) throws -> Decision {
-        let hasApple = FileManager.default.isExecutableFile(atPath: fm.executable)
+        let hasApple = fm.isAvailable
         switch provider {
         case .apple:
             guard hasApple else { throw HatError.fmUnavailable }
