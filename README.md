@@ -77,7 +77,23 @@ If a model returns the uploaded filename unchanged, Sorting Hat leaves the sourc
 sorting-hat init [--config PATH]
 sorting-hat once [--config PATH] [--dry-run]
 sorting-hat watch [--config PATH] [--dry-run]
+sorting-hat evaluate --live --corpus PATH --output PATH [--baseline PATH] [--config PATH]
 ```
+
+## Live Foundation Models evaluation
+
+Live quality checks are deliberately opt-in and read-only. Create a private, anonymized corpus outside the repository, copy the format in `Tests/SortingHatTests/Fixtures/live-evaluation-corpus.example.json`, then run:
+
+```sh
+.build/debug/sorting-hat evaluate --live \
+  --corpus ~/SortingHat-Evaluation/corpus/corpus.json \
+  --output ~/SortingHat-Evaluation/results/run-001 \
+  --config sortinghat.conf
+```
+
+The manifest is versioned and contains rules plus cases with a relative source path, content kind (`receipt`, `scan`, `screenshot`, `pdf`, `office_document`, or `ambiguous`), accepted folders, required filename terms, required tags, and whether an empty-folder abstention is expected. The checked-in template defines all six required classes but deliberately includes no documents. Corpus files must sit beside or below the manifest; output inside that corpus directory is rejected. The evaluator calls Apple `fm` but never calls `Organizer.apply`, so sources are not renamed, tagged, or moved.
+
+Each run writes `evaluation.json` and `summary.md`. The artifact records model, OS, prompt version, use case, guardrails, per-case decisions and latency, accuracy, generation failures, unsafe/invalid decisions, and abstentions. Pass a previous `evaluation.json` with `--baseline` to expose regressions in the Markdown summary. Exit status `2` means a threshold or baseline regressed; `1` means the evaluation could not run. Do not commit corpus documents or results containing private or copyrighted content; only the synthetic manifest example belongs in the repository.
 
 `watch` intentionally uses a small polling loop in this first version. It is simple and reliable for a human-scale drop folder; a launch agent and event-driven watcher can come next.
 

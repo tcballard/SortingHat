@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "name": "sorting-hat-representative-v1",
+  "rules": [
+    "Give every file a short descriptive filename.",
+    "Put receipts in Receipts/YYYY and tag them receipt.",
+    "Put screenshots in Screenshots/YYYY-MM and tag them screenshot.",
+    "Put everything else in Files/YYYY-MM."
+  ],
+  "thresholds": {
+    "minimum_accuracy": 0.8,
+    "maximum_generation_failure_rate": 0.05,
+    "maximum_unsafe_decision_rate": 0
+  },
+  "cases": [
+    {
+      "id": "receipt-001",
+      "path": "documents/receipt-001.pdf",
+      "kind": "receipt",
+      "expected": {
+        "folders": ["Receipts/2026"],
+        "filename_contains": ["receipt"],
+        "tags": ["receipt"],
+        "abstain": false
+      }
+    },
+    {
+      "id": "scan-001",
+      "path": "documents/scan-001.pdf",
+      "kind": "scan",
+      "expected": { "folders": ["Files/2026-07"], "filename_contains": ["form"], "tags": [], "abstain": false }
+    },
+    {
+      "id": "screenshot-001",
+      "path": "documents/screenshot-001.png",
+      "kind": "screenshot",
+      "expected": { "folders": ["Screenshots/2026-07"], "filename_contains": ["settings"], "tags": ["screenshot"], "abstain": false }
+    },
+    {
+      "id": "pdf-001",
+      "path": "documents/pdf-001.pdf",
+      "kind": "pdf",
+      "expected": { "folders": ["Files/2026-07"], "filename_contains": ["report"], "tags": [], "abstain": false }
+    },
+    {
+      "id": "office-001",
+      "path": "documents/office-001.docx",
+      "kind": "office_document",
+      "expected": { "folders": ["Files/2026-07"], "filename_contains": ["meeting"], "tags": [], "abstain": false }
+    },
+    {
+      "id": "ambiguous-001",
+      "path": "documents/ambiguous-001.txt",
+      "kind": "ambiguous",
+      "expected": { "folders": [], "filename_contains": [], "tags": [], "abstain": true }
+    }
+  ]
+}
