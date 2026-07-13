@@ -47,6 +47,10 @@ ollama_url: http://127.0.0.1:11434
 ollama_model: gemma3:4b
 openai_model:
 model_provider: automatic
+apple_model: automatic
+apple_use_case: general
+apple_guardrails: default
+allow_apple_pcc: false
 
 rules:
   - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.
@@ -55,7 +59,9 @@ rules:
   - Put everything else in Files/YYYY-MM and add one useful topic tag.
 ```
 
-Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic first checks whether Apple's on-device system model is ready, then falls back to local Ollama and OpenAI. Apple requests use guided JSON output, deterministic generation, and native multimodal input for supported images. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`.
+Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Apple can use the local `system` model, Private Cloud Compute (`pcc`), or an automatic policy. Automatic always tries on-device first and retries PCC only after an availability or generation failure. Content extraction, unsafe paths, and invalid filing decisions never trigger cloud escalation. PCC is disabled until `allow_apple_pcc: true` is explicitly saved; enabling it means file context may be sent to Apple's Private Cloud Compute service. Overall provider selection then falls back to configured Ollama and OpenAI providers when Apple is unavailable.
+
+For the on-device system model, `apple_use_case: content-tagging` opts into the `fm` content-tagging specialization. `apple_guardrails: permissive-content-transformations` relaxes the system model's content-transformation guardrails for filing material that the default policy refuses; use the default unless your rules require that behavior. These system-only options are omitted from PCC requests. Apple requests continue using guided JSON output, deterministic generation, and native multimodal input for supported images. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`.
 
 Sorting Hat reads searchable PDFs, plain-text formats, RTF, Word, and OpenDocument files. For scanned PDFs and receipt images, it uses Apple's local Vision framework to recognize text before asking the selected model to name and file the document. Embedded PDF text is preferred, so searchable PDFs avoid unnecessary OCR. Extraction is limited to the first 5 pages and 12,000 characters; the source file is never modified. If a scanned PDF cannot be rendered or contains no sufficiently confident text, Sorting Hat leaves it in the Inbox and reports the extraction failure.
 
