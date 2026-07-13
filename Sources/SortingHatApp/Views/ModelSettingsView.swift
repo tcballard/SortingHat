@@ -19,7 +19,7 @@ struct ModelSettingsView: View {
             Form {
                 Picker("Provider", selection: $provider) {
                     Text("Automatic").tag(ModelProvider.automatic)
-                    Text("Apple (macOS 27)").tag(ModelProvider.apple)
+                    Text("Apple (On-Device)").tag(ModelProvider.apple)
                     Text("Ollama").tag(ModelProvider.ollama)
                     Text("OpenAI").tag(ModelProvider.openai)
                 }
@@ -59,7 +59,7 @@ struct ModelSettingsView: View {
     private var providerHelp: String {
         switch provider {
         case .automatic: "Automatic tries Apple first, then Ollama, then OpenAI. Leave a model empty to skip that provider."
-        case .apple: "Uses Apple's private on-device model and requires macOS 27 with Apple Intelligence."
+        case .apple: "Uses Apple's private on-device model. Requires macOS 27, Apple Intelligence, and a downloaded system model."
         case .ollama: "Uses the configured local Ollama server and never falls through to OpenAI."
         case .openai: "Uses OpenAI directly. The API key is stored in macOS Keychain; selected files may be sent to OpenAI."
         }
