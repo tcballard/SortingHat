@@ -51,7 +51,7 @@ public struct OpenAIAnalyzer: FileAnalyzing {
         Organize one file. Return only JSON with exactly these keys:
         {"filename":"descriptive-name.ext","folder":"relative/folder","tags":["tag"],"reason":"short explanation"}
         Rules:\n\(rules.map { "- \($0)" }.joined(separator: "\n"))
-        Original filename: \(file.lastPathComponent). Preserve the extension. Folder must be relative and must not contain ...
+        Original filename: \(file.lastPathComponent). Always replace it with a short, descriptive filename; never return it unchanged. Preserve the extension. Choose the most specific rule-matching folder, not a generic Sorted folder. Folder is relative to the configured output directory and must not contain .. or be absolute.
         """
     }
 

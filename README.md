@@ -41,6 +41,7 @@ Drag files into `~/SortingHat/Inbox`. Keep `sortinghat.conf` in the directory wh
 
 ```yaml
 inbox: ~/SortingHat/Inbox
+output: ~/SortingHat
 settle_seconds: 2
 ollama_url: http://127.0.0.1:11434
 ollama_model: gemma3:4b
@@ -49,14 +50,14 @@ model_provider: automatic
 
 rules:
   - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.
-  - Put receipts in Finance/Receipts/YYYY and tag them receipt and the merchant name.
+  - Put receipts in Receipts/YYYY and tag them receipt and the merchant name.
   - Put screenshots in Screenshots/YYYY-MM and tag them screenshot.
-  - Put everything else in Sorted/YYYY-MM and add one useful topic tag.
+  - Put everything else in Files/YYYY-MM and add one useful topic tag.
 ```
 
 Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic prefers Apple's on-device `fm`, then local Ollama, then OpenAI. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`. Images may be sent to the selected provider; other files are classified from their filenames in this release.
 
-The model can suggest only a relative folder inside the inbox. Sorting Hat rejects absolute paths and traversal, creates destination folders, preserves existing files with numbered names, and writes tags as Finder metadata.
+The Inbox is intake-only. Sorting Hat renames each file and moves it to a rule-specific folder under `output` (for example, `~/SortingHat/Receipts/2026`). It creates those destination folders as needed, rejects absolute paths and traversal, preserves existing files with numbered names, and writes tags as Finder metadata.
 
 ## Commands
 

@@ -13,6 +13,7 @@ struct SortingHatTests {
         let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try """
         inbox: ~/Drop
+        output: ~/Filed
         settle_seconds: 1.5
         rules:
           - Put receipts in Finance.
@@ -20,6 +21,7 @@ struct SortingHatTests {
         """.write(to: url, atomically: true, encoding: .utf8)
         let config = try ConfigLoader.load(url)
         #expect(config.inbox == "~/Drop")
+        #expect(config.output == "~/Filed")
         #expect(config.settleSeconds == 1.5)
         #expect(config.rules == ["Put receipts in Finance.", "Use lowercase names."])
     }
@@ -31,14 +33,21 @@ struct SortingHatTests {
 
     @Test func plansCollisionSafeMove() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-        try FileManager.default.createDirectory(at: root.appending(path: "Trips"), withIntermediateDirectories: true)
-        let source = root.appending(path: "IMG_1234.jpg")
-        let existing = root.appending(path: "Trips/train.jpg")
+        let inbox = root.appending(path: "Inbox")
+        let output = root.appending(path: "Library")
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: output.appending(path: "Trips"), withIntermediateDirectories: true)
+        let source = inbox.appending(path: "IMG_1234.jpg")
+        let existing = output.appending(path: "Trips/train.jpg")
         FileManager.default.createFile(atPath: source.path, contents: Data())
         FileManager.default.createFile(atPath: existing.path, contents: Data())
         let analyzer = StubAnalyzer(decision: Decision(filename: "train.jpg", folder: "Trips", tags: ["travel"], reason: "A train"))
-        let move = try Organizer(inbox: root, rules: ["Sort it"], analyzer: analyzer).plan(source)
+        let move = try Organizer(inbox: inbox, output: output, rules: ["Sort it"], analyzer: analyzer).plan(source)
         #expect(move.destination.lastPathComponent == "train-2.jpg")
+        #expect(move.destination.deletingLastPathComponent().standardizedFileURL.path == output.appending(path: "Trips").standardizedFileURL.path)
+        try Organizer(inbox: inbox, output: output, rules: ["Sort it"], analyzer: analyzer).apply(move)
+        #expect(!FileManager.default.fileExists(atPath: source.path))
+        #expect(FileManager.default.fileExists(atPath: move.destination.path))
     }
 
     @Test func rejectsModelPathTraversal() throws {

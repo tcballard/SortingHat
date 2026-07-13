@@ -17,7 +17,7 @@ public struct FMAnalyzer: FileAnalyzing {
         Rules:
         \(rules.map { "- \($0)" }.joined(separator: "\n"))
 
-        The original filename is \(file.lastPathComponent). Preserve an appropriate file extension. Folder must be relative; never use .. or an absolute path.
+        The original filename is \(file.lastPathComponent). Always replace it with a short, descriptive filename; do not return the original filename unchanged. Preserve an appropriate file extension. Choose the most specific rule-matching folder (for example, receipts belong in Receipts), not a generic Sorted folder. Folder must be relative to the configured output directory; never use .. or an absolute path.
         """
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
