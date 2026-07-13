@@ -25,6 +25,41 @@ public struct Organizer {
 
     public func plan(_ file: URL) throws -> PlannedMove {
         let decision = try analyzer.analyze(file: file, rules: rules)
+        return try plan(file, decision: decision)
+    }
+
+    public func planAll(_ files: [URL]) -> [PlanningOutcome] {
+        guard let batchAnalyzer = analyzer as? any BatchFileAnalyzing else {
+            return files.map { file in
+                do { return .success(try plan(file)) }
+                catch { return .failure(source: file, error: error) }
+            }
+        }
+
+        let inputs = files.enumerated().map { BatchFileInput(id: "file-\($0.offset + 1)", file: $0.element) }
+        let outcomes = batchAnalyzer.analyzeBatch(files: inputs, rules: rules)
+        let grouped = Dictionary(grouping: outcomes) { outcome in
+            switch outcome {
+            case .decision(let sourceID, _), .failure(let sourceID, _): sourceID
+            }
+        }
+
+        return inputs.map { input in
+            guard let matches = grouped[input.id], matches.count == 1 else {
+                let detail = grouped[input.id] == nil ? "missing result for \(input.id)" : "duplicate results for \(input.id)"
+                return .failure(source: input.file, error: HatError.invalidBatch(detail))
+            }
+            switch matches[0] {
+            case .decision(_, let decision):
+                do { return .success(try plan(input.file, decision: decision)) }
+                catch { return .failure(source: input.file, error: error) }
+            case .failure(_, let error):
+                return .failure(source: input.file, error: error)
+            }
+        }
+    }
+
+    private func plan(_ file: URL, decision: Decision) throws -> PlannedMove {
         let filename = try Self.safeComponent(decision.filename, label: "filename")
         let proposedExtension = URL(fileURLWithPath: filename).pathExtension
         guard proposedExtension.caseInsensitiveCompare(file.pathExtension) == .orderedSame else {
