@@ -29,6 +29,19 @@ struct SortingHatTests {
         #expect(try FMAnalyzer.decode(data).filename == "train.jpg")
     }
 
+    @Test func configuresAppleStructuredImageRequest() {
+        let file = URL(fileURLWithPath: "/tmp/receipt.png")
+        let schema = URL(fileURLWithPath: "/tmp/decision.schema.json")
+        let arguments = FMAnalyzer.commandArguments(file: file, rules: ["File receipts by year."], schemaURL: schema)
+        #expect(arguments.starts(with: ["respond", "--model", "system"]))
+        #expect(arguments.contains("--schema"))
+        #expect(arguments.contains("--no-stream"))
+        #expect(arguments.contains("--greedy"))
+        #expect(arguments.contains("--image"))
+        #expect(arguments.contains("--text"))
+        #expect(arguments.contains { $0.contains("File receipts by year.") })
+    }
+
     @Test func plansCollisionSafeMove() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: root.appending(path: "Trips"), withIntermediateDirectories: true)

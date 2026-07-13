@@ -41,10 +41,10 @@ public enum HatError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .invalidConfig(let message): "Invalid config: \(message)"
-        case .fmUnavailable: "Apple's fm command was not found. It is included with macOS 27 or later."
+        case .fmUnavailable: "Apple's on-device Foundation Model is unavailable. It requires macOS 27, Apple Intelligence, and a downloaded system model."
         case .invalidResponse(let response): "fm returned an invalid decision: \(response)"
         case .unsafePath(let path): "Refusing unsafe path from model: \(path)"
-        case .noModelProvider: "Apple's fm requires macOS 27. Configure Ollama or OpenAI in Model Settings to sort on this Mac."
+        case .noModelProvider: "Apple's on-device Foundation Model is unavailable. Configure Ollama or OpenAI in Model Settings to sort on this Mac."
         }
     }
 }

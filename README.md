@@ -1,11 +1,11 @@
 # Sorting Hat
 
-A drop folder with opinions. Sorting Hat asks Apple's on-device `fm` model what a file is, then renames, Finder-tags, and files it using rules you write in plain English.
+A drop folder with opinions. Sorting Hat asks Apple's on-device Foundation Model what a file is, then renames, Finder-tags, and files it using rules you write in plain English.
 
 > [!WARNING]
 > The current `v0.1.0` build is an experimental pre-release. Its app bundle is ad-hoc signed, not signed with an Apple Developer ID, and it is not notarized. Gatekeeper may block the first launch; managed Macs may prohibit it entirely. Homebrew installation confirms the archive and cask are valid, but does not bypass these macOS security checks.
 
-- On-device by default: Apple's model on macOS 27, with local Ollama fallback on earlier versions.
+- On-device by default: Apple's model on macOS 27, with guided structured output and local Ollama fallback on earlier versions.
 - Safe to tinker with: inspect every proposed action with `--dry-run`.
 - Yours to teach: the config is a few sentences, not a programming language.
 
@@ -54,7 +54,7 @@ rules:
   - Put everything else in Sorted/YYYY-MM and add one useful topic tag.
 ```
 
-Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic prefers Apple's on-device `fm`, then local Ollama, then OpenAI. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`. Images may be sent to the selected provider; other files are classified from their filenames in this release.
+Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic first checks whether Apple's on-device system model is ready, then falls back to local Ollama and OpenAI. Apple requests use guided JSON output, deterministic generation, and native multimodal input for supported images. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`. Images may be sent to the selected provider; other files are classified from their filenames in this release.
 
 The model can suggest only a relative folder inside the inbox. Sorting Hat rejects absolute paths and traversal, creates destination folders, preserves existing files with numbered names, and writes tags as Finder metadata.
 
