@@ -55,9 +55,11 @@ rules:
   - Put everything else in Files/YYYY-MM and add one useful topic tag.
 ```
 
-Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic first checks whether Apple's on-device system model is ready, then falls back to local Ollama and OpenAI. Apple requests use guided JSON output, deterministic generation, and native multimodal input for supported images. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`. Images may be sent to the selected provider; other files are classified from their filenames in this release.
+Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Automatic first checks whether Apple's on-device system model is ready, then falls back to local Ollama and OpenAI. Apple requests use guided JSON output, deterministic generation, and native multimodal input for supported images. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`. Sorting Hat also extracts bounded local text from searchable PDFs, plain-text formats, RTF, Word, and OpenDocument files so receipts and documents can be named and filed from their contents.
 
 The Inbox is intake-only. Sorting Hat renames each file and moves it to a rule-specific folder under `output` (for example, `~/SortingHat/Receipts/2026`). It creates those destination folders as needed, rejects absolute paths and traversal, preserves existing files with numbered names, and writes tags as Finder metadata.
+
+If a model returns the uploaded filename unchanged, Sorting Hat leaves the source in the Inbox and reports an invalid sorting decision instead of silently skipping the requested rename.
 
 ## Commands
 

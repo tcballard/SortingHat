@@ -26,6 +26,13 @@ public struct Organizer {
     public func plan(_ file: URL) throws -> PlannedMove {
         let decision = try analyzer.analyze(file: file, rules: rules)
         let filename = try Self.safeComponent(decision.filename, label: "filename")
+        let proposedExtension = URL(fileURLWithPath: filename).pathExtension
+        guard proposedExtension.caseInsensitiveCompare(file.pathExtension) == .orderedSame else {
+            throw HatError.invalidDecision("the renamed file must preserve the .\(file.pathExtension) extension")
+        }
+        guard Self.normalizedFilename(filename) != Self.normalizedFilename(file.lastPathComponent) else {
+            throw HatError.invalidDecision("the model returned the original filename unchanged: \(filename)")
+        }
         let folder = try Self.safeFolder(decision.folder)
         var destination = output.appending(path: folder, directoryHint: .isDirectory).appending(path: filename)
         destination = available(destination, excluding: file)
@@ -65,6 +72,11 @@ public struct Organizer {
         let parts = trimmed.split(separator: "/", omittingEmptySubsequences: false)
         guard parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else { throw HatError.unsafePath(value) }
         return trimmed
+    }
+
+    private static func normalizedFilename(_ filename: String) -> String {
+        filename.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func writeFinderTags(_ tags: [String], to file: URL) throws {
