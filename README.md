@@ -95,6 +95,8 @@ The manifest is versioned and contains rules plus cases with a relative source p
 
 Each run writes `evaluation.json` and `summary.md`. The artifact records model, OS, prompt version, use case, guardrails, per-case decisions and latency, accuracy, generation failures, unsafe/invalid decisions, and abstentions. Pass a previous `evaluation.json` with `--baseline` to expose regressions in the Markdown summary. Exit status `2` means a threshold or baseline regressed; `1` means the evaluation could not run. Do not commit corpus documents or results containing private or copyrighted content; only the synthetic manifest example belongs in the repository.
 
+For reproducible multi-prompt, system/content-tagging, and system/PCC comparisons, use the locked standalone Python project in [`evaluation/`](evaluation/README.md). It consumes the same corpus manifest and produces JSON, CSV, Markdown, and chart artifacts without adding Python to the application runtime.
+
 `watch` intentionally uses a small polling loop in this first version. It is simple and reliable for a human-scale drop folder; a launch agent and event-driven watcher can come next.
 
 ## Development

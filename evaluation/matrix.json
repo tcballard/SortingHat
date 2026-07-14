@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "variants": [
+    { "id": "concise-system-general", "prompt": "concise-v1", "model": "system", "use_case": "general" },
+    { "id": "detailed-system-general", "prompt": "detailed-v1", "model": "system", "use_case": "general" },
+    { "id": "detailed-system-tagging", "prompt": "detailed-v1", "model": "system", "use_case": "content-tagging" },
+    { "id": "detailed-pcc", "prompt": "detailed-v1", "model": "pcc", "use_case": "general" }
+  ]
+}

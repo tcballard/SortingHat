@@ -2,3 +2,8 @@
 dist/
 .DS_Store
 sortinghat.conf
+evaluation/.venv/
+evaluation/.pytest_cache/
+evaluation/**/__pycache__/
+evaluation/**/*.egg-info/
+evaluation/results/

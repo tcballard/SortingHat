@@ -1,0 +1,25 @@
+[project]
+name = "sortinghat-evaluation"
+version = "0.1.0"
+description = "Reproducible prompt comparison tooling for Sorting Hat"
+requires-python = ">=3.10,<3.15"
+dependencies = [
+  "apple-fm-sdk==0.1.1",
+  "matplotlib==3.10.7",
+]
+
+[project.scripts]
+sortinghat-evaluate = "sortinghat_evaluation.cli:main"
+
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = ["pytest==8.4.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
