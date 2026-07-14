@@ -10,6 +10,15 @@ struct StubAnalyzer: FileAnalyzing {
     func analyze(file: URL, rules: [String]) throws -> Decision { decision }
 }
 
+struct EvaluationAnalyzer: FileAnalyzing {
+    func analyze(file: URL, rules: [String]) throws -> Decision {
+        if file.lastPathComponent == "unsafe.txt" {
+            return Decision(filename: "unsafe-renamed.txt", folder: "../Escape", tags: [], reason: "unsafe")
+        }
+        return Decision(filename: "tesco-receipt.txt", folder: "Receipts/2026", tags: ["receipt", "tesco"], reason: "receipt")
+    }
+}
+
 struct OCRRequiringAnalyzer: FileAnalyzing {
     func analyze(file: URL, rules: [String]) throws -> Decision {
         _ = try DocumentTextExtractor.extractContent(from: file)
@@ -111,6 +120,61 @@ private func fakeFMExecutable(counter: URL) throws -> URL {
 
 @Suite(.serialized)
 struct SortingHatTests {
+    @Test func liveEvaluationScoresDecisionsWithoutChangingCorpus() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let receipt = root.appending(path: "receipt.txt")
+        let unsafe = root.appending(path: "unsafe.txt")
+        try "TESCO total GBP 42.18".write(to: receipt, atomically: true, encoding: .utf8)
+        try "untrusted".write(to: unsafe, atomically: true, encoding: .utf8)
+        let originalReceipt = try Data(contentsOf: receipt)
+        let manifest = EvaluationManifest(version: 1, name: "synthetic", rules: ["File receipts"], cases: [
+            EvaluationCase(id: "receipt", path: "receipt.txt", kind: "receipt", expected: ExpectedDecision(
+                folders: ["Receipts/2026"], filenameContains: ["tesco", "receipt"], tags: ["receipt"], abstain: false)),
+            EvaluationCase(id: "unsafe", path: "unsafe.txt", kind: "ambiguous", expected: ExpectedDecision(
+                folders: ["Files/2026-07"], filenameContains: [], tags: [], abstain: false)),
+        ], thresholds: EvaluationThresholds(minimumAccuracy: 0.5, maximumGenerationFailureRate: 0, maximumUnsafeDecisionRate: 0))
+        let configuration = EvaluationConfiguration(model: "system", useCase: "general", guardrails: "default",
+            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS")
+
+        let artifact = LiveEvaluator.run(manifest: manifest, corpusRoot: root, analyzer: EvaluationAnalyzer(), configuration: configuration)
+
+        #expect(artifact.metrics.total == 2)
+        #expect(artifact.metrics.correct == 1)
+        #expect(artifact.metrics.unsafeOrInvalidDecisions == 1)
+        #expect(artifact.thresholdFailures.contains { $0.contains("unsafe/invalid") })
+        #expect(try Data(contentsOf: receipt) == originalReceipt)
+        #expect(FileManager.default.fileExists(atPath: unsafe.path))
+    }
+
+    @Test func liveEvaluationWritesMachineAndHumanReadableRegressionArtifacts() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let output = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "TESCO".write(to: root.appending(path: "receipt.txt"), atomically: true, encoding: .utf8)
+        let manifest = EvaluationManifest(version: 1, name: "synthetic", rules: ["File receipts"], cases: [
+            EvaluationCase(id: "receipt", path: "receipt.txt", kind: "receipt", expected: ExpectedDecision(
+                folders: ["Wrong"], filenameContains: ["receipt"], tags: ["receipt"], abstain: false)),
+        ], thresholds: nil)
+        let configuration = EvaluationConfiguration(model: "system", useCase: "general", guardrails: "default",
+            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS")
+        let baselineMetrics = EvaluationMetrics(total: 1, correct: 1, folderCorrect: 1, filenameCorrect: 1, tagsCorrect: 1,
+            generationFailures: 0, schemaFailures: 0, unsafeOrInvalidDecisions: 0, abstentions: 0, accuracy: 1,
+            generationFailureRate: 0, unsafeDecisionRate: 0, averageLatencyMilliseconds: 1)
+        let baseline = EvaluationArtifact(schemaVersion: 1, corpusName: "synthetic", createdAt: Date(), configuration: configuration,
+            metrics: baselineMetrics, results: [], thresholdFailures: [], regressions: [])
+
+        let artifact = LiveEvaluator.run(manifest: manifest, corpusRoot: root, analyzer: EvaluationAnalyzer(),
+                                         configuration: configuration, baseline: baseline)
+        try LiveEvaluator.write(artifact, to: output)
+
+        #expect(artifact.regressions.contains { $0.contains("accuracy regressed") })
+        #expect(FileManager.default.fileExists(atPath: output.appending(path: "evaluation.json").path))
+        let summary = try String(contentsOf: output.appending(path: "summary.md"), encoding: .utf8)
+        #expect(summary.contains("FAIL"))
+        #expect(summary.contains("accuracy regressed"))
+    }
+
     @Test func parsesHumanReadableConfig() throws {
         let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try """

@@ -7,6 +7,7 @@ public protocol FileAnalyzing: Sendable {
 /// Analyzes files with the on-device Apple Foundation Model exposed by macOS's
 /// `fm` command-line interface.
 public struct FMAnalyzer: FileAnalyzing, BatchFileAnalyzing {
+    public static let promptVersion = "sorting-decision-v1"
     public static let maximumBatchSize = 8
     public static let maximumBatchCharacters = 24_000
     public let executable: String
