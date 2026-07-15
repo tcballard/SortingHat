@@ -54,9 +54,7 @@ private struct AppActionBridge: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        WindowCaptureView { window in
-            appDelegate.setDashboardWindow(window)
-        }
+        Color.clear
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
             .onAppear {
@@ -66,39 +64,9 @@ private struct AppActionBridge: View {
 }
 
 @MainActor
-private struct WindowCaptureView: NSViewRepresentable {
-    let onWindowChange: (NSWindow?) -> Void
-
-    func makeNSView(context: Context) -> WindowCaptureNSView {
-        WindowCaptureNSView(onWindowChange: onWindowChange)
-    }
-
-    func updateNSView(_ nsView: WindowCaptureNSView, context: Context) {}
-}
-
-@MainActor
-private final class WindowCaptureNSView: NSView {
-    private let onWindowChange: (NSWindow?) -> Void
-
-    init(onWindowChange: @escaping (NSWindow?) -> Void) {
-        self.onWindowChange = onWindowChange
-        super.init(frame: .zero)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { nil }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        onWindowChange(window)
-    }
-}
-
-@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private weak var store: HatStore?
-    private weak var dashboardWindow: NSWindow?
     private var openWindow: OpenWindowAction?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -111,10 +79,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.store = store
         self.openWindow = openWindow
         updateStatusItem()
-    }
-
-    func setDashboardWindow(_ window: NSWindow?) {
-        dashboardWindow = window
     }
 
     private func installStatusItem() {
@@ -199,19 +163,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleDashboardWindow() {
-        guard let dashboardWindow else {
+        guard let dashboardWindow = NSApp.windows.first(where: { $0.title == "Sorting Hat" }) else {
             showWindow("dashboard")
-            return
-        }
-
-        if dashboardWindow.isVisible && dashboardWindow.isKeyWindow {
-            dashboardWindow.orderOut(nil)
             return
         }
 
         if dashboardWindow.isMiniaturized {
             dashboardWindow.deminiaturize(nil)
+            dashboardWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
         }
+
+        if dashboardWindow.isVisible {
+            dashboardWindow.orderOut(nil)
+            return
+        }
+
         dashboardWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
