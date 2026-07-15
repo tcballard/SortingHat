@@ -62,12 +62,34 @@ final class HatStore {
                 case .success(let move):
                     do {
                         try organizer.apply(move)
-                        recent.insert(Activity(name: move.destination.lastPathComponent, detail: move.reason, succeeded: true), at: 0)
+                        recent.insert(Activity(
+                            sourceName: move.source.lastPathComponent,
+                            filedName: move.destination.lastPathComponent,
+                            destination: Self.displayPath(move.destination.deletingLastPathComponent()),
+                            fileURL: move.destination,
+                            tags: move.tags,
+                            detail: move.reason,
+                            outcome: .filed
+                        ), at: 0)
                     } catch {
-                        recent.insert(Activity(name: move.source.lastPathComponent, detail: error.localizedDescription, succeeded: false), at: 0)
+                        recent.insert(Activity(
+                            sourceName: move.source.lastPathComponent,
+                            detail: error.localizedDescription,
+                            outcome: .failed
+                        ), at: 0)
                     }
                 case .failure(let source, let error):
-                    recent.insert(Activity(name: source.lastPathComponent, detail: error.localizedDescription, succeeded: false), at: 0)
+                    let outcome: Activity.Outcome
+                    if let hatError = error as? HatError, case .needsReview = hatError {
+                        outcome = .needsReview
+                    } else {
+                        outcome = .failed
+                    }
+                    recent.insert(Activity(
+                        sourceName: source.lastPathComponent,
+                        detail: error.localizedDescription,
+                        outcome: outcome
+                    ), at: 0)
                 }
                 recent = Array(recent.prefix(20))
             }
@@ -76,6 +98,7 @@ final class HatStore {
     }
 
     func openInbox() { NSWorkspace.shared.open(inbox) }
+    func reveal(_ url: URL) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
     func loadRules() throws -> [String] { try ConfigLoader.load(configURL).rules }
 
     func saveRules(_ rules: [String]) throws {
@@ -158,6 +181,11 @@ final class HatStore {
         URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL
     }
 
+    private static func displayPath(_ url: URL) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return url.path == home ? "~" : url.path.replacingOccurrences(of: home + "/", with: "~/")
+    }
+
     private static var quickActionURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appending(path: "Library/Services/Send to Sorting Hat.workflow", directoryHint: .isDirectory)
@@ -189,7 +217,47 @@ private extension URL {
 
 struct Activity: Identifiable {
     let id = UUID()
-    let name: String
+    let sourceName: String
+    let filedName: String?
+    let destination: String?
+    let fileURL: URL?
+    let tags: [String]
     let detail: String
-    let succeeded: Bool
+    let outcome: Outcome
+    let date: Date
+
+    init(
+        sourceName: String,
+        filedName: String? = nil,
+        destination: String? = nil,
+        fileURL: URL? = nil,
+        tags: [String] = [],
+        detail: String,
+        outcome: Outcome,
+        date: Date = .now
+    ) {
+        self.sourceName = sourceName
+        self.filedName = filedName
+        self.destination = destination
+        self.fileURL = fileURL
+        self.tags = tags
+        self.detail = detail
+        self.outcome = outcome
+        self.date = date
+    }
+
+    enum Outcome: String {
+        case filed = "Filed"
+        case needsReview = "Needs Review"
+        case failed = "Failed"
+
+        var symbol: String {
+            switch self {
+            case .filed: "checkmark.circle.fill"
+            case .needsReview: "questionmark.circle.fill"
+            case .failed: "exclamationmark.triangle.fill"
+            }
+        }
+
+    }
 }
