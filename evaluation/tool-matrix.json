@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "initial_excerpt_characters": 2000,
+  "tool_policy": {
+    "baseline_variant": "tools-baseline",
+    "minimum_accuracy_uplift": 0.02,
+    "maximum_failure_rate_increase": 0,
+    "maximum_latency_increase_ms": 500
+  },
+  "variants": [
+    { "id": "tools-baseline", "prompt": "detailed-v1", "model": "system", "use_case": "general", "tools": [] },
+    { "id": "tool-destination-catalog", "prompt": "detailed-v1", "model": "system", "use_case": "general", "tools": ["destination_catalog"] },
+    { "id": "tool-file-metadata", "prompt": "detailed-v1", "model": "system", "use_case": "general", "tools": ["file_metadata"] },
+    { "id": "tool-content-segment", "prompt": "detailed-v1", "model": "system", "use_case": "general", "tools": ["content_segment"] },
+    { "id": "tool-taxonomy-lookup", "prompt": "detailed-v1", "model": "system", "use_case": "general", "tools": ["taxonomy_lookup"] }
+  ]
+}

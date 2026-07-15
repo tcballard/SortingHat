@@ -97,6 +97,8 @@ Each run writes `evaluation.json` and `summary.md`. The artifact records model, 
 
 For reproducible multi-prompt, system/content-tagging, and system/PCC comparisons, use the locked standalone Python project in [`evaluation/`](evaluation/README.md). It consumes the same corpus manifest and produces JSON, CSV, Markdown, and chart artifacts without adding Python to the application runtime.
 
+Bounded tool-calling candidates are also evaluated there under a documented threat model and evidence gate. Filesystem mutation remains exclusively in validated Swift code; no evaluation tool is available to the shipping app unless a future change demonstrates and reviews measurable value first.
+
 `watch` intentionally uses a small polling loop in this first version. It is simple and reliable for a human-scale drop folder; a launch agent and event-driven watcher can come next.
 
 ## Development

@@ -17,7 +17,7 @@ Apple's published Python SDK currently exposes the on-device text model, includi
 From this directory:
 
 ```sh
-uv sync --frozen
+uv sync --frozen --no-editable
 uv run sortinghat-evaluate \
   --corpus ~/SortingHat-Evaluation/corpus/corpus.json \
   --output ~/SortingHat-Evaluation/results/python-run-001 \
@@ -46,5 +46,31 @@ Source documents are read but never changed. Store the corpus and generated outp
 Run deterministic tests without invoking a model:
 
 ```sh
-uv run pytest
+uv run --no-sync pytest
 ```
+
+## Bounded tool-calling experiment
+
+Candidate filing-context tools are evaluation-only and cannot mutate or browse the filesystem. Their data boundaries, argument/result caps, call budget, provider behavior, and acceptance gate are documented in [`TOOL_THREAT_MODEL.md`](TOOL_THREAT_MODEL.md).
+
+Add optional top-level `destinations` and `taxonomy` values to the private corpus manifest, then run the controlled matrix:
+
+```json
+{
+  "destinations": [
+    { "folder": "Receipts/2026", "description": "Purchase receipts from 2026" }
+  ],
+  "taxonomy": {
+    "finance": "Receipts, invoices, statements, and tax documents"
+  }
+}
+```
+
+```sh
+uv run sortinghat-evaluate \
+  --corpus ~/SortingHat-Evaluation/corpus/corpus.json \
+  --matrix tool-matrix.json \
+  --output ~/SortingHat-Evaluation/results/tool-run-001
+```
+
+The baseline and each candidate see the same initial 2,000-character excerpt. Only `content_segment` can request another range from the already-extracted 12,000-character text. `comparison.json` records enabled tools and actual call counts; `summary.md` marks each candidate `ACCEPT` or `REJECT`. A candidate must actually be called, improve accuracy by at least two percentage points, add no failures, and add no more than 500 ms average latency. No tool is enabled in the shipping app by this experiment.
