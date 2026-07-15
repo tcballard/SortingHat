@@ -60,6 +60,7 @@ public enum HatError: Error, LocalizedError, Sendable {
     case pccLimitReached(String)
     case invalidResponse(String)
     case invalidDecision(String)
+    case needsReview(String)
     case contentExtractionFailed(String)
     case unsafePath(String)
     case noModelProvider
@@ -74,6 +75,7 @@ public enum HatError: Error, LocalizedError, Sendable {
         case .pccLimitReached(let message): "Apple Private Cloud Compute usage limit was reached: \(message)"
         case .invalidResponse(let response): "fm returned an invalid decision: \(response)"
         case .invalidDecision(let message): "Invalid sorting decision: \(message)"
+        case .needsReview(let message): "Needs review: \(message)"
         case .contentExtractionFailed(let message): "Could not read file content: \(message)"
         case .unsafePath(let path): "Refusing unsafe path from model: \(path)"
         case .noModelProvider: "Apple's on-device Foundation Model is unavailable. Configure Ollama or OpenAI in Model Settings to sort on this Mac."

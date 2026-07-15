@@ -60,6 +60,10 @@ public struct Organizer {
     }
 
     private func plan(_ file: URL, decision: Decision) throws -> PlannedMove {
+        let proposedFolder = decision.folder.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !proposedFolder.isEmpty else {
+            throw HatError.needsReview(decision.reason)
+        }
         let filename = try Self.safeComponent(decision.filename, label: "filename")
         let proposedExtension = URL(fileURLWithPath: filename).pathExtension
         guard proposedExtension.caseInsensitiveCompare(file.pathExtension) == .orderedSame else {
@@ -68,7 +72,7 @@ public struct Organizer {
         guard Self.normalizedFilename(filename) != Self.normalizedFilename(file.lastPathComponent) else {
             throw HatError.invalidDecision("the model returned the original filename unchanged: \(filename)")
         }
-        let folder = try Self.safeFolder(decision.folder)
+        let folder = try Self.safeFolder(proposedFolder)
         var destination = output.appending(path: folder, directoryHint: .isDirectory).appending(path: filename)
         destination = available(destination, excluding: file)
         return PlannedMove(source: file, destination: destination, tags: decision.tags, reason: decision.reason)

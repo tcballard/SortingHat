@@ -407,6 +407,19 @@ struct SortingHatTests {
         #expect(throws: HatError.self) { try Organizer(inbox: root, rules: ["Rename files"], analyzer: analyzer).plan(source) }
     }
 
+    @Test func leavesExplicitAbstentionInInboxForReview() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "unclear.txt")
+        try "Follow up later".write(to: source, atomically: true, encoding: .utf8)
+        let analyzer = StubAnalyzer(decision: Decision(filename: "follow-up.txt", folder: "", tags: [], reason: "Insufficient context"))
+
+        #expect(throws: HatError.self) {
+            try Organizer(inbox: root, output: root.appending(path: "Filed"), rules: ["Sort it"], analyzer: analyzer).plan(source)
+        }
+        #expect(FileManager.default.fileExists(atPath: source.path))
+    }
+
     @Test func boundsExtractedDocumentText() throws {
         let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).txt")
         try String(repeating: "receipt ", count: 100).write(to: file, atomically: true, encoding: .utf8)
