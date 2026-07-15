@@ -18,8 +18,8 @@ struct DashboardView: View {
         .navigationTitle("Sorting Hat")
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                Button("Open Inbox", systemImage: "folder") { store.openInbox() }
-                    .help("Open Inbox (⇧⌘I)")
+                Button("Show Inbox in Finder", systemImage: "folder") { store.openInbox() }
+                    .help("Show Inbox in Finder (⇧⌘I)")
                 Button("Rules", systemImage: "text.badge.checkmark") { openWindow(id: "rules") }
                     .help("Show Sorting Rules (⌥⌘R)")
             }
@@ -88,7 +88,7 @@ struct DashboardView: View {
                 Text("Add files to the Inbox. Sorting Hat will rename and file them using your rules.")
             } actions: {
                 HStack {
-                    Button("Open Inbox") { store.openInbox() }
+                    Button("Show Inbox in Finder") { store.openInbox() }
                     Button("Review Rules") { openWindow(id: "rules") }
                 }
             }
@@ -199,7 +199,7 @@ private struct ActivityDetailView: View {
                     Button("Show in Finder", systemImage: "magnifyingglass") { store.reveal(fileURL) }
                         .controlSize(.small)
                 } else {
-                    Button("Open Inbox", systemImage: "folder") { store.openInbox() }
+                    Button("Show Inbox in Finder", systemImage: "folder") { store.openInbox() }
                         .controlSize(.small)
                 }
             }

@@ -19,9 +19,9 @@ struct HatMenu: View {
             .keyboardShortcut("s", modifiers: [.command, .shift])
             .disabled(store.isProcessing)
         Divider()
-        Button("Open Inbox") { store.openInbox() }
+        Button("Open Inbox") { showWindow("dashboard") }
         Button("Show Sorting Rules") { showWindow("rules") }
-        Button("Open Sorting Hat") { showWindow("dashboard") }
+        Button("Show Inbox in Finder") { store.openInbox() }
         SettingsLink { Text("Settings…") }
         Divider()
         Button("Quit Sorting Hat") { NSApplication.shared.terminate(nil) }

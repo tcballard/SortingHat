@@ -38,7 +38,7 @@ private struct SortingHatCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("Open Inbox") { store.openInbox() }
+            Button("Show Inbox in Finder") { store.openInbox() }
                 .keyboardShortcut("i", modifiers: [.command, .shift])
             Button("Show Sorting Rules") { openWindow(id: "rules") }
                 .keyboardShortcut("r", modifiers: [.command, .option])
