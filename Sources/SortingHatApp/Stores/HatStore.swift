@@ -62,7 +62,7 @@ final class HatStore {
                 case .success(let move):
                     do {
                         try organizer.apply(move)
-                        recent.insert(Activity(
+                        record(Activity(
                             sourceName: move.source.lastPathComponent,
                             filedName: move.destination.lastPathComponent,
                             destination: Self.displayPath(move.destination.deletingLastPathComponent()),
@@ -70,13 +70,14 @@ final class HatStore {
                             tags: move.tags,
                             detail: move.reason,
                             outcome: .filed
-                        ), at: 0)
+                        ))
                     } catch {
-                        recent.insert(Activity(
+                        record(Activity(
                             sourceName: move.source.lastPathComponent,
+                            fileURL: move.source,
                             detail: error.localizedDescription,
                             outcome: .failed
-                        ), at: 0)
+                        ))
                     }
                 case .failure(let source, let error):
                     let outcome: Activity.Outcome
@@ -85,13 +86,13 @@ final class HatStore {
                     } else {
                         outcome = .failed
                     }
-                    recent.insert(Activity(
+                    record(Activity(
                         sourceName: source.lastPathComponent,
+                        fileURL: source,
                         detail: error.localizedDescription,
                         outcome: outcome
-                    ), at: 0)
+                    ))
                 }
-                recent = Array(recent.prefix(20))
             }
             status = isWatching ? "Watching Inbox" : "Ready"
         } catch { status = error.localizedDescription }
@@ -181,6 +182,14 @@ final class HatStore {
         URL(fileURLWithPath: NSString(string: path).expandingTildeInPath).standardizedFileURL
     }
 
+    private func record(_ activity: Activity) {
+        if activity.outcome != .filed {
+            recent.removeAll { $0.sourceName == activity.sourceName && $0.outcome != .filed }
+        }
+        recent.insert(activity, at: 0)
+        recent = Array(recent.prefix(20))
+    }
+
     private static func displayPath(_ url: URL) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return url.path == home ? "~" : url.path.replacingOccurrences(of: home + "/", with: "~/")
@@ -241,7 +250,11 @@ struct Activity: Identifiable {
         self.destination = destination
         self.fileURL = fileURL
         self.tags = tags
-        self.detail = detail
+        self.detail = detail.replacingOccurrences(
+            of: "\u{001B}\\[[0-9;]*[A-Za-z]",
+            with: "",
+            options: .regularExpression
+        )
         self.outcome = outcome
         self.date = date
     }
