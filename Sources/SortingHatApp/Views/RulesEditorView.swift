@@ -9,9 +9,13 @@ struct RulesEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
+                Image(systemName: "sparkles")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(SortingHatTheme.amber)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Sorting Rules").font(.title2.bold())
-                    Text("Rules run together. Put specific destinations before the catch-all rule.")
+                    Text("The hat’s judgement").font(.title2.bold())
+                    Text("Rules work together. Put specific destinations before the catch-all rule.")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -143,7 +147,8 @@ private struct RuleEditorRow: View {
         HStack(alignment: .top, spacing: 10) {
             Text("\(index + 1)")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(SortingHatTheme.amber)
+                .fontWeight(.semibold)
                 .frame(width: 22, alignment: .trailing)
                 .padding(.top, 5)
 

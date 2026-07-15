@@ -27,7 +27,7 @@ final class HatStore {
     func start() {
         guard !isWatching else { return }
         isWatching = true
-        status = "Watching Inbox"
+        status = "Watching the Inbox"
         watchTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.processNow()
@@ -38,7 +38,7 @@ final class HatStore {
 
     func pause() {
         watchTask?.cancel(); watchTask = nil
-        isWatching = false; status = "Paused"
+        isWatching = false; status = "The hat is resting"
     }
 
     func processNow() async {
@@ -55,8 +55,8 @@ final class HatStore {
                                              appleGuardrails: config.appleGuardrails, allowApplePCC: config.allowApplePCC)
             let organizer = Organizer(inbox: configuredInbox, output: output, rules: config.rules, analyzer: analyzer)
             let files = try organizer.candidates()
-            if files.isEmpty { if isWatching { status = "Watching Inbox" }; return }
-            status = "Reading \(files.count) file\(files.count == 1 ? "" : "s")"
+            if files.isEmpty { if isWatching { status = "Watching the Inbox" }; return }
+            status = "Considering \(files.count) file\(files.count == 1 ? "" : "s")"
             for outcome in organizer.planAll(files) {
                 switch outcome {
                 case .success(let move):
@@ -94,7 +94,7 @@ final class HatStore {
                     ))
                 }
             }
-            status = isWatching ? "Watching Inbox" : "Ready"
+            status = isWatching ? "Watching the Inbox" : "Ready"
         } catch { status = error.localizedDescription }
     }
 
@@ -111,7 +111,7 @@ final class HatStore {
         var config = try ConfigLoader.load(configURL)
         config.rules = cleaned
         try ConfigLoader.save(config, to: configURL)
-        status = isWatching ? "Watching Inbox" : "Rules Updated"
+        status = isWatching ? "Watching the Inbox" : "Rules Updated"
     }
 
     func loadModelSettings() throws -> (provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase, appleGuardrails: AppleGuardrails, allowApplePCC: Bool, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
