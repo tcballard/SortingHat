@@ -24,6 +24,7 @@ enum SortingHatTheme {
 
 struct WizardHatSymbol: View {
     var active = true
+    var size: CGFloat = 30
 
     private var hatColor: Color {
         active ? SortingHatTheme.amberBright : .white.opacity(0.58)
@@ -32,8 +33,8 @@ struct WizardHatSymbol: View {
     var body: some View {
         WizardHatSilhouette()
             .fill(hatColor)
-            .frame(width: 29, height: 25)
-            .frame(width: 30, height: 26)
+            .frame(width: size * 29 / 30, height: size * 25 / 30)
+            .frame(width: size, height: size * 26 / 30)
         .accessibilityHidden(true)
     }
 }

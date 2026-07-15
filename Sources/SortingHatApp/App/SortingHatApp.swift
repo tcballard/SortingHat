@@ -94,8 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
         let isWatching = store?.isWatching ?? true
-        let symbol = isWatching ? "graduationcap.fill" : "graduationcap"
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Sorting Hat")
+        button.image = wizardHatImage()
+        button.alphaValue = isWatching ? 1 : 0.58
         button.toolTip = isWatching ? "Sorting Hat — monitoring Inbox" : "Sorting Hat — paused"
         button.setAccessibilityLabel(isWatching ? "Sorting Hat, monitoring Inbox" : "Sorting Hat, paused")
     }
@@ -112,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showStatusMenu(relativeTo button: NSStatusBarButton) {
         let menu = NSMenu()
         let status = NSMenuItem(title: store?.isProcessing == true ? "Sorting files…" : (store?.status ?? "Sorting Hat"), action: nil, keyEquivalent: "")
-        status.image = NSImage(systemSymbolName: store?.isWatching == false ? "pause.circle" : "graduationcap.fill", accessibilityDescription: nil)
+        status.image = wizardHatImage()
         menu.addItem(status)
 
         let reviewCount = store?.recent.filter { $0.outcome == .needsReview }.count ?? 0
@@ -145,6 +145,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.target = self
         item.keyEquivalentModifierMask = modifiers
         return item
+    }
+
+    private func wizardHatImage() -> NSImage? {
+        let renderer = ImageRenderer(content: WizardHatSymbol(size: 18))
+        renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+        guard let image = renderer.nsImage else { return nil }
+        image.size = NSSize(width: 18, height: 16)
+        image.isTemplate = true
+        image.accessibilityDescription = "Sorting Hat"
+        return image
     }
 
     private func showWindow(_ id: String) {
