@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from .bounded_tools import SUPPORTED_TOOLS, ToolContext, build_tools
+
 
 @dataclass(frozen=True)
 class Variant:
@@ -19,6 +21,7 @@ class Variant:
     prompt: str
     model: str
     use_case: str
+    tools: tuple[str, ...] = ()
 
 
 @dataclass
@@ -29,6 +32,8 @@ class CaseResult:
     model: str
     use_case: str
     prompt_version: str
+    enabled_tools: tuple[str, ...]
+    tool_calls: dict[str, int]
     transport: str
     os: str
     latency_ms: float
@@ -47,16 +52,18 @@ class CaseResult:
 
 class Backend(Protocol):
     async def respond(self, *, variant: Variant, instructions: str, prompt: str,
-                      source: Path) -> dict[str, Any]: ...
+                      source: Path, tool_context: ToolContext) -> dict[str, Any]: ...
 
 
 class AppleBackend:
     """Uses Apple's Python SDK for system variants and Apple's fm CLI for PCC."""
 
     async def respond(self, *, variant: Variant, instructions: str, prompt: str,
-                      source: Path) -> dict[str, Any]:
+                      source: Path, tool_context: ToolContext) -> dict[str, Any]:
         is_image = source.suffix.lower() in {".jpg", ".jpeg", ".png", ".heic", ".gif", ".tiff", ".webp"}
         if variant.model == "pcc" or is_image:
+            if variant.tools:
+                raise ValueError("tool calling is unsupported by the fm CLI transport")
             return await asyncio.to_thread(self._respond_cli, variant, instructions, prompt, source)
         if variant.model != "system":
             raise ValueError(f"unsupported model: {variant.model}")
@@ -75,7 +82,8 @@ class AppleBackend:
         available, reason = model.is_available()
         if not available:
             raise RuntimeError(f"system model unavailable: {reason}")
-        response = await fm.LanguageModelSession(model=model, instructions=instructions).respond(
+        tools = build_tools(variant.tools, tool_context)
+        response = await fm.LanguageModelSession(model=model, instructions=instructions, tools=tools).respond(
             prompt=prompt, generating=SortingDecision)
         return {"filename": response.filename, "folder": response.folder,
                 "tags": list(response.tags), "reason": response.reason}
@@ -126,7 +134,9 @@ def load_content(path: Path) -> str:
 def validate_inputs(corpus: dict[str, Any], matrix: dict[str, Any], prompts: dict[str, Any]) -> list[Variant]:
     if corpus.get("version") != 1 or matrix.get("version") != 1 or prompts.get("version") != 1:
         raise ValueError("corpus, matrix, and prompts must use version 1")
-    variants = [Variant(**value) for value in matrix.get("variants", [])]
+    variants = [Variant(id=value["id"], prompt=value["prompt"], model=value["model"],
+                        use_case=value["use_case"], tools=tuple(value.get("tools", [])))
+                for value in matrix.get("variants", [])]
     if not variants or not corpus.get("cases"):
         raise ValueError("matrix variants and corpus cases cannot be empty")
     for variant in variants:
@@ -138,6 +148,12 @@ def validate_inputs(corpus: dict[str, Any], matrix: dict[str, Any], prompts: dic
             raise ValueError("PCC does not accept system-only use-case controls")
         if variant.use_case not in {"general", "content-tagging"}:
             raise ValueError(f"unknown use case: {variant.use_case}")
+        if set(variant.tools) - SUPPORTED_TOOLS:
+            raise ValueError(f"variant {variant.id} includes an unsupported tool")
+        if len(variant.tools) != len(set(variant.tools)):
+            raise ValueError(f"variant {variant.id} repeats a tool")
+        if variant.model != "system" and variant.tools:
+            raise ValueError("tool calling is supported only by the system Python SDK transport")
     return variants
 
 
@@ -156,23 +172,37 @@ async def run_pipeline(*, corpus_path: Path, matrix_path: Path, prompts_path: Pa
             source = (root / case["path"]).resolve()
             if root not in source.parents or not source.is_file():
                 raise ValueError(f"case {case['id']} is missing or escapes the corpus")
+            content = load_content(source)
+            excerpt_limit = int(matrix.get("initial_excerpt_characters",
+                                           corpus.get("initial_excerpt_characters", 12_000)))
+            if not 1 <= excerpt_limit <= 12_000:
+                raise ValueError("initial excerpt must contain 1 to 12,000 characters")
             prompt = prompt_variant["template"].format(
                 rules="\n".join(f"- {rule}" for rule in corpus["rules"]),
-                filename=source.name, content=load_content(source),
+                filename=source.name, content=content[:excerpt_limit],
             )
+            destinations = tuple(corpus.get("destinations", []))
+            size = source.stat().st_size
+            size_bucket = "small" if size < 100_000 else "medium" if size < 10_000_000 else "large"
+            tool_context = ToolContext(destinations=destinations,
+                metadata={"extension": source.suffix.lower(), "size_bucket": size_bucket,
+                          "content_kind": str(case["kind"])},
+                content=content, taxonomy=dict(corpus.get("taxonomy", {})))
             started, decision, error = time.perf_counter(), None, None
             try:
                 decision = await backend.respond(variant=variant, instructions=prompt_variant["instructions"],
-                                                 prompt=prompt, source=source)
+                                                 prompt=prompt, source=source, tool_context=tool_context)
             except Exception as exc:  # every failed generation remains a comparable row
                 error = f"{type(exc).__name__}: {exc}"
-            results.append(score(case, variant, os_version, (time.perf_counter() - started) * 1000, decision, error))
+            results.append(score(case, variant, os_version, (time.perf_counter() - started) * 1000,
+                                 decision, error, tool_context.calls))
     artifact = {
         "schema_version": 1, "created_at": datetime.now(timezone.utc).isoformat(),
         "corpus_name": corpus["name"], "matrix": str(matrix_path),
         "results": [asdict(result) | {"correct": result.correct} for result in results],
         "summaries": summarize(results),
     }
+    artifact["tool_evidence"] = assess_tool_evidence(artifact["summaries"], matrix.get("tool_policy"))
     output.mkdir(parents=True, exist_ok=True)
     (output / "comparison.json").write_text(json.dumps(artifact, indent=2, sort_keys=True), encoding="utf-8")
     write_csv(output / "comparison.csv", artifact["summaries"])
@@ -207,7 +237,8 @@ def compare_artifacts(paths: list[Path], output: Path) -> dict[str, Any]:
 
 
 def score(case: dict[str, Any], variant: Variant, os_version: str, latency_ms: float,
-          decision: dict[str, Any] | None, error: str | None) -> CaseResult:
+          decision: dict[str, Any] | None, error: str | None,
+          tool_calls: dict[str, int] | None = None) -> CaseResult:
     expected, decision = case["expected"], decision or {}
     filename = str(decision.get("filename", "")).lower()
     tags = {str(tag).lower() for tag in decision.get("tags", [])}
@@ -223,7 +254,8 @@ def score(case: dict[str, Any], variant: Variant, os_version: str, latency_ms: f
     transport = "fm-cli" if variant.model == "pcc" or case["path"].lower().endswith(
         (".jpg", ".jpeg", ".png", ".heic", ".gif", ".tiff", ".webp")) else "python-sdk"
     return CaseResult(variant.id, case["id"], case["kind"], variant.model, variant.use_case,
-                      variant.prompt, transport, os_version, latency_ms, decision or None, error,
+                      variant.prompt, variant.tools, dict(tool_calls or {}), transport, os_version,
+                      latency_ms, decision or None, error,
                       folder_correct, filename_correct, tags_correct, missing, excess)
 
 
@@ -234,7 +266,8 @@ def summarize(results: list[CaseResult]) -> list[dict[str, Any]]:
         count = len(group)
         rows.append({
             "variant": variant, "model": group[0].model, "use_case": group[0].use_case,
-            "prompt_version": group[0].prompt_version,
+            "prompt_version": group[0].prompt_version, "enabled_tools": list(group[0].enabled_tools),
+            "tool_calls": sum(sum(result.tool_calls.values()) for result in group),
             "accuracy": sum(result.correct for result in group) / count,
             "failure_rate": sum(result.error is not None for result in group) / count,
             "missing_information": sum(result.missing_information for result in group) / count,
@@ -244,9 +277,35 @@ def summarize(results: list[CaseResult]) -> list[dict[str, Any]]:
     return rows
 
 
+def assess_tool_evidence(rows: list[dict[str, Any]], policy: dict[str, Any] | None) -> dict[str, Any]:
+    if not policy:
+        return {"status": "not_requested", "accepted": [], "candidates": []}
+    baseline = next((row for row in rows if row["variant"] == policy.get("baseline_variant")), None)
+    if baseline is None or baseline["enabled_tools"]:
+        raise ValueError("tool policy baseline must name a no-tool variant")
+    candidates = []
+    for row in rows:
+        if not row["enabled_tools"]:
+            continue
+        uplift = row["accuracy"] - baseline["accuracy"]
+        failure_delta = row["failure_rate"] - baseline["failure_rate"]
+        latency_delta = row["average_latency_ms"] - baseline["average_latency_ms"]
+        accepted = (uplift >= float(policy.get("minimum_accuracy_uplift", 0.02)) and
+                    failure_delta <= float(policy.get("maximum_failure_rate_increase", 0)) and
+                    latency_delta <= float(policy.get("maximum_latency_increase_ms", 500)) and
+                    row["tool_calls"] > 0)
+        candidates.append({"variant": row["variant"], "tools": row["enabled_tools"],
+                           "accuracy_uplift": uplift, "failure_rate_delta": failure_delta,
+                           "latency_delta_ms": latency_delta, "tool_calls": row["tool_calls"],
+                           "accepted": accepted})
+    return {"status": "evaluated", "accepted": [item["variant"] for item in candidates if item["accepted"]],
+            "candidates": candidates}
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames); writer.writeheader(); writer.writerows(rows)
 
 
 def write_summary(path: Path, artifact: dict[str, Any]) -> None:
@@ -257,6 +316,14 @@ def write_summary(path: Path, artifact: dict[str, Any]) -> None:
         lines.append(f"| {row['variant']} | {row['model']} | {row['use_case']} | {row['prompt_version']} | "
                      f"{row['accuracy']:.1%} | {row['failure_rate']:.1%} | {row['missing_information']:.2f} | "
                      f"{row['excess_information']:.2f} | {row['average_latency_ms']:.1f} ms |")
+    evidence = artifact.get("tool_evidence", {})
+    if evidence.get("status") == "evaluated":
+        lines.extend(["", "## Tool evidence", ""])
+        for item in evidence["candidates"]:
+            verdict = "ACCEPT" if item["accepted"] else "REJECT"
+            lines.append(f"- **{verdict}** `{item['variant']}`: accuracy {item['accuracy_uplift']:+.1%}, "
+                         f"failures {item['failure_rate_delta']:+.1%}, latency {item['latency_delta_ms']:+.1f} ms, "
+                         f"{item['tool_calls']} calls")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

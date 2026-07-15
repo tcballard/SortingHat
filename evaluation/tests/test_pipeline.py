@@ -2,11 +2,15 @@ import asyncio
 import json
 from pathlib import Path
 
-from sortinghat_evaluation.pipeline import Variant, compare_artifacts, run_pipeline, score, summarize
+import pytest
+
+from sortinghat_evaluation.bounded_tools import MAX_SEGMENT_CHARACTERS, ToolContext, bounded_json
+from sortinghat_evaluation.pipeline import (Variant, assess_tool_evidence, compare_artifacts,
+                                            run_pipeline, score, summarize, validate_inputs)
 
 
 class FakeBackend:
-    async def respond(self, *, variant, instructions, prompt, source):
+    async def respond(self, *, variant, instructions, prompt, source, tool_context):
         if variant.id == "broken":
             raise RuntimeError("generation failed")
         return {"filename": "tesco-receipt.txt", "folder": "Receipts/2026",
@@ -86,3 +90,44 @@ def test_requires_explicit_pcc_permission(tmp_path: Path):
         assert False, "PCC matrix should require explicit permission"
     except ValueError as error:
         assert "explicit PCC permission" in str(error)
+
+
+def test_tool_context_rejects_unbounded_or_sensitive_data():
+    with pytest.raises(ValueError, match="non-permitted"):
+        ToolContext(destinations=(), metadata={"path": "/private/file"}, content="", taxonomy={})
+    with pytest.raises(ValueError, match="length limit"):
+        ToolContext(destinations=(), metadata={}, content="x" * 12_001, taxonomy={})
+    with pytest.raises(ValueError, match="length limit"):
+        bounded_json({"result": "x" * 4_001})
+
+
+def test_tool_call_budget_is_shared_across_candidates():
+    context = ToolContext(destinations=(), metadata={}, content="content", taxonomy={})
+    for _ in range(4):
+        context.record("content_segment")
+    with pytest.raises(ValueError, match="call limit"):
+        context.record("file_metadata")
+
+
+def test_tool_evidence_accepts_only_measurable_used_improvement():
+    rows = [
+        {"variant": "baseline", "enabled_tools": [], "accuracy": 0.7, "failure_rate": 0.1,
+         "average_latency_ms": 100, "tool_calls": 0},
+        {"variant": "useful", "enabled_tools": ["content_segment"], "accuracy": 0.8, "failure_rate": 0.1,
+         "average_latency_ms": 200, "tool_calls": 3},
+        {"variant": "unused", "enabled_tools": ["file_metadata"], "accuracy": 0.8, "failure_rate": 0.1,
+         "average_latency_ms": 200, "tool_calls": 0},
+    ]
+    evidence = assess_tool_evidence(rows, {"baseline_variant": "baseline", "minimum_accuracy_uplift": 0.02,
+                                           "maximum_failure_rate_increase": 0, "maximum_latency_increase_ms": 500})
+    assert evidence["accepted"] == ["useful"]
+    assert not evidence["candidates"][1]["accepted"]
+
+
+def test_rejects_tools_on_unsupported_provider():
+    corpus = {"version": 1, "cases": [{"id": "one"}]}
+    matrix = {"version": 1, "variants": [{"id": "cloud", "prompt": "p", "model": "pcc",
+                                              "use_case": "general", "tools": ["file_metadata"]}]}
+    prompts = {"version": 1, "prompts": {"p": {}}}
+    with pytest.raises(ValueError, match="only by the system"):
+        validate_inputs(corpus, matrix, prompts)
