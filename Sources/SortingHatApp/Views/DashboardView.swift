@@ -55,9 +55,7 @@ struct DashboardView: View {
                         .foregroundStyle(.white.opacity(0.68))
                 }
             } icon: {
-                Image(systemName: statusSymbol)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(SortingHatTheme.amberBright)
+                WizardHatSymbol(active: store.isWatching)
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(store.isProcessing ? "Sorting files" : store.status)
@@ -147,11 +145,6 @@ struct DashboardView: View {
     }
 
     private var reviewCount: Int { store.recent.filter { $0.outcome == .needsReview }.count }
-
-    private var statusSymbol: String {
-        if store.isProcessing { return "arrow.triangle.2.circlepath" }
-        return store.isWatching ? "graduationcap.fill" : "pause.circle.fill"
-    }
 
     private func color(for outcome: Activity.Outcome) -> Color {
         switch outcome {
