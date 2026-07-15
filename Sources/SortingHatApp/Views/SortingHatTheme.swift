@@ -30,49 +30,63 @@ struct WizardHatSymbol: View {
     }
 
     var body: some View {
-        ZStack {
-            WizardHatCrown()
-                .fill(hatColor)
-                .frame(width: 22, height: 18)
-                .offset(y: -2)
-
-            Capsule()
-                .fill(hatColor)
-                .frame(width: 25, height: 4)
-                .offset(y: 7)
-
-            Image(systemName: "sparkle")
-                .font(.system(size: 6, weight: .black))
-                .foregroundStyle(SortingHatTheme.ink.opacity(active ? 0.9 : 0.55))
-                .offset(x: -2, y: 1)
-        }
-        .frame(width: 27, height: 24)
+        WizardHatSilhouette()
+            .fill(hatColor)
+            .frame(width: 29, height: 25)
+            .frame(width: 30, height: 26)
         .accessibilityHidden(true)
     }
 }
 
-private struct WizardHatCrown: Shape {
+private struct WizardHatSilhouette: Shape {
     func path(in rect: CGRect) -> Path {
         func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
             CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
         }
 
         var path = Path()
-        path.move(to: point(0.08, 0.94))
+
+        // Crooked crown and folded tip.
+        path.move(to: point(0.30, 0.68))
+        path.addLine(to: point(0.39, 0.28))
+        path.addLine(to: point(0.51, 0.22))
+        path.addLine(to: point(0.55, 0.05))
+        path.addLine(to: point(0.68, 0.00))
+        path.addLine(to: point(0.77, 0.18))
+        path.addLine(to: point(0.88, 0.10))
+        path.addLine(to: point(0.80, 0.29))
+        path.addLine(to: point(0.72, 0.25))
         path.addCurve(
-            to: point(0.50, 0.02),
-            control1: point(0.20, 0.66),
-            control2: point(0.31, 0.12)
+            to: point(0.77, 0.68),
+            control1: point(0.73, 0.41),
+            control2: point(0.79, 0.58)
         )
+        path.addCurve(to: point(0.30, 0.68), control1: point(0.62, 0.73), control2: point(0.43, 0.73))
+        path.closeSubpath()
+
+        // Uneven hat band.
+        path.move(to: point(0.27, 0.64))
+        path.addCurve(to: point(0.78, 0.67), control1: point(0.43, 0.71), control2: point(0.64, 0.73))
+        path.addLine(to: point(0.75, 0.78))
+        path.addCurve(to: point(0.26, 0.75), control1: point(0.57, 0.83), control2: point(0.39, 0.80))
+        path.closeSubpath()
+
+        // Wide, swept brim with a nicked trailing edge.
+        path.move(to: point(0.03, 0.89))
         path.addCurve(
-            to: point(0.92, 0.36),
-            control1: point(0.63, 0.14),
-            control2: point(0.78, 0.40)
+            to: point(0.29, 0.73),
+            control1: point(0.12, 0.83),
+            control2: point(0.21, 0.76)
         )
+        path.addCurve(to: point(0.93, 0.78), control1: point(0.50, 0.79), control2: point(0.73, 0.70))
+        path.addLine(to: point(0.84, 0.89))
+        path.addLine(to: point(0.78, 0.87))
+        path.addLine(to: point(0.81, 0.95))
+        path.addLine(to: point(0.73, 0.90))
         path.addCurve(
-            to: point(0.72, 0.94),
-            control1: point(0.83, 0.54),
-            control2: point(0.80, 0.76)
+            to: point(0.03, 0.89),
+            control1: point(0.48, 1.01),
+            control2: point(0.25, 0.84)
         )
         path.closeSubpath()
         return path
