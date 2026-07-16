@@ -229,6 +229,7 @@ public enum LiveEvaluator {
     }
 
     private static func validate(file: URL, decision: Decision, rules: [String]) -> Error? {
+        if decision.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
         struct FixedAnalyzer: FileAnalyzing {
             let decision: Decision
             func analyze(file: URL, rules: [String]) throws -> Decision { decision }

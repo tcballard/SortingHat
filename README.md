@@ -71,6 +71,8 @@ The Inbox is intake-only. Sorting Hat renames each file and moves it to a rule-s
 
 If a model returns the uploaded filename unchanged, Sorting Hat leaves the source in the Inbox and reports an invalid sorting decision instead of silently skipping the requested rename.
 
+If the model cannot classify a file confidently, it can return an empty destination. Sorting Hat treats that as **Needs review** and leaves the source in the Inbox rather than guessing. Automatic provider selection also falls through to a configured Ollama or OpenAI provider when Apple reports the system model as available but generation fails.
+
 ## Commands
 
 ```text

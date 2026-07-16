@@ -11,7 +11,9 @@ APP_MACOS="$APP_BUNDLE/Contents/MacOS"
 APP_RESOURCES="$APP_BUNDLE/Contents/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+for process_name in "$APP_NAME" "Sorting Hat" SortingHat sorting-hat; do
+  pkill -x "$process_name" >/dev/null 2>&1 || true
+done
 env CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/clang-cache" SWIFTPM_MODULECACHE_OVERRIDE="$ROOT_DIR/.build/swift-cache" swift build --disable-sandbox -c "$CONFIGURATION" --product "$APP_NAME"
 BUILD_BINARY="$(swift build -c "$CONFIGURATION" --show-bin-path)/$APP_NAME"
 rm -rf "$APP_BUNDLE"
