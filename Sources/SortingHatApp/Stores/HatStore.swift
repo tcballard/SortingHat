@@ -9,19 +9,31 @@ final class HatStore {
     var isProcessing = false
     var status = "Ready"
     var recent: [Activity] = []
+    var setupRequired = false
     var launchAtLogin = SMAppService.mainApp.status == .enabled
     var quickActionInstalled = false
-    let inbox: URL
+    var activityRetention = UserDefaults.standard.object(forKey: "activityRetention") as? Int ?? 200
+    var inbox: URL
+    var outputRoot: URL
     let configURL: URL
+    let activityURL: URL
     private var watchTask: Task<Void, Never>?
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
         inbox = home.appending(path: "SortingHat/Inbox", directoryHint: .isDirectory)
+        outputRoot = home.appending(path: "SortingHat", directoryHint: .isDirectory)
         configURL = home.appending(path: "SortingHat/sortinghat.conf")
+        activityURL = home.appending(path: "SortingHat/activity-history.json")
+        setupRequired = !FileManager.default.fileExists(atPath: configURL.path)
         quickActionInstalled = Self.quickActionURL.fileExists
         bootstrap()
-        start()
+        if let config = try? ConfigLoader.load(configURL) {
+            inbox = Self.expandedURL(config.inbox)
+            outputRoot = Self.expandedURL(config.output)
+        }
+        recent = ledger.load()
+        if !setupRequired { start() }
     }
 
     func start() {
@@ -64,6 +76,7 @@ final class HatStore {
                         try organizer.apply(move)
                         record(Activity(
                             sourceName: move.source.lastPathComponent,
+                            sourceURL: move.source,
                             filedName: move.destination.lastPathComponent,
                             destination: Self.displayPath(move.destination.deletingLastPathComponent()),
                             fileURL: move.destination,
@@ -74,6 +87,7 @@ final class HatStore {
                     } catch {
                         record(Activity(
                             sourceName: move.source.lastPathComponent,
+                            sourceURL: move.source,
                             fileURL: move.source,
                             detail: error.localizedDescription,
                             outcome: .failed
@@ -88,6 +102,7 @@ final class HatStore {
                     }
                     record(Activity(
                         sourceName: source.lastPathComponent,
+                        sourceURL: source,
                         fileURL: source,
                         detail: error.localizedDescription,
                         outcome: outcome
@@ -112,6 +127,79 @@ final class HatStore {
         config.rules = cleaned
         try ConfigLoader.save(config, to: configURL)
         status = isWatching ? "Watching the Inbox" : "Rules Updated"
+    }
+
+    func completeSetup(with plan: RulePlan) throws {
+        try RulePlanValidator.validate(plan)
+        try saveRules(plan.compiledRules)
+        setupRequired = false
+        start()
+    }
+
+    func saveLocations(inbox: URL, output: URL) throws {
+        var config = try ConfigLoader.load(configURL)
+        config.inbox = Self.portablePath(inbox)
+        config.output = Self.portablePath(output)
+        try ConfigLoader.save(config, to: configURL)
+        self.inbox = inbox.standardizedFileURL
+        outputRoot = output.standardizedFileURL
+        try FileManager.default.createDirectory(at: self.inbox, withIntermediateDirectories: true)
+    }
+
+    func restartSetup() {
+        pause()
+        setupRequired = true
+    }
+
+    func setActivityRetention(_ limit: Int) {
+        activityRetention = min(max(limit, 25), 1000)
+        UserDefaults.standard.set(activityRetention, forKey: "activityRetention")
+        recent = Array(recent.prefix(activityRetention))
+        try? ledger.save(recent)
+    }
+
+    func undo(_ activity: Activity) throws {
+        guard activity.outcome == .filed, let filedURL = activity.fileURL, let sourceURL = activity.sourceURL else { return }
+        guard FileManager.default.fileExists(atPath: filedURL.path) else {
+            throw RulePlanError.invalid("The filed item is no longer at its recorded destination.")
+        }
+        try FileManager.default.createDirectory(at: sourceURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard !FileManager.default.fileExists(atPath: sourceURL.path) else {
+            throw RulePlanError.invalid("A file named \(sourceURL.lastPathComponent) already exists in the Inbox.")
+        }
+        try FileManager.default.moveItem(at: filedURL, to: sourceURL)
+        recent.removeAll { $0.id == activity.id }
+        try? ledger.save(recent)
+        status = "Returned \(sourceURL.lastPathComponent) to the Inbox"
+    }
+
+    func resolve(_ activity: Activity, filedName: String, destination: String, teachingRule: String?) throws {
+        guard let source = activity.fileURL, FileManager.default.fileExists(atPath: source.path) else {
+            throw RulePlanError.invalid("The review file is no longer in the Inbox.")
+        }
+        let name = filedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let folder = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !name.contains("/"), !name.contains(":"), URL(fileURLWithPath: name).pathExtension == source.pathExtension else {
+            throw RulePlanError.invalid("Use a safe filename and preserve the .\(source.pathExtension) extension.")
+        }
+        guard !folder.isEmpty, !folder.hasPrefix("/"), !folder.hasPrefix("~"),
+              !folder.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else {
+            throw RulePlanError.invalid("Choose a safe destination under the output folder.")
+        }
+        let destinationURL = outputRoot.appending(path: folder, directoryHint: .isDirectory).appending(path: name)
+        guard !FileManager.default.fileExists(atPath: destinationURL.path) else {
+            throw RulePlanError.invalid("A file with that name already exists at the destination.")
+        }
+        try FileManager.default.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: source, to: destinationURL)
+        recent.removeAll { $0.id == activity.id }
+        record(Activity(sourceName: activity.sourceName, sourceURL: source, filedName: name, destination: folder,
+                        fileURL: destinationURL, detail: "Corrected during review", outcome: .filed))
+        if let teachingRule, !teachingRule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            var rules = try loadRules()
+            rules.insert(teachingRule.trimmingCharacters(in: .whitespacesAndNewlines), at: max(1, rules.count - 1))
+            try saveRules(rules)
+        }
     }
 
     func loadModelSettings() throws -> (provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase, appleGuardrails: AppleGuardrails, allowApplePCC: Bool, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
@@ -153,7 +241,7 @@ final class HatStore {
         }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [script.path]
+        process.arguments = [script.path, inbox.path]
         do {
             try process.run()
             process.waitUntilExit()
@@ -187,12 +275,21 @@ final class HatStore {
             recent.removeAll { $0.sourceName == activity.sourceName && $0.outcome != .filed }
         }
         recent.insert(activity, at: 0)
-        recent = Array(recent.prefix(20))
+        recent = Array(recent.prefix(ledger.retentionLimit))
+        try? ledger.save(recent)
     }
+
+    private var ledger: ActivityLedger { ActivityLedger(url: activityURL, retentionLimit: activityRetention) }
 
     private static func displayPath(_ url: URL) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return url.path == home ? "~" : url.path.replacingOccurrences(of: home + "/", with: "~/")
+    }
+
+    private static func portablePath(_ url: URL) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let path = url.standardizedFileURL.path
+        return path == home ? "~" : path.replacingOccurrences(of: home + "/", with: "~/")
     }
 
     private static var quickActionURL: URL {
@@ -224,9 +321,10 @@ private extension URL {
     var fileExists: Bool { FileManager.default.fileExists(atPath: path) }
 }
 
-struct Activity: Identifiable {
-    let id = UUID()
+struct Activity: Identifiable, Codable {
+    let id: UUID
     let sourceName: String
+    let sourceURL: URL?
     let filedName: String?
     let destination: String?
     let fileURL: URL?
@@ -237,6 +335,7 @@ struct Activity: Identifiable {
 
     init(
         sourceName: String,
+        sourceURL: URL? = nil,
         filedName: String? = nil,
         destination: String? = nil,
         fileURL: URL? = nil,
@@ -245,13 +344,15 @@ struct Activity: Identifiable {
         outcome: Outcome,
         date: Date = .now
     ) {
+        self.id = UUID()
         self.sourceName = sourceName
+        self.sourceURL = sourceURL
         self.filedName = filedName
         self.destination = destination
         self.fileURL = fileURL
         self.tags = tags
         self.detail = detail.replacingOccurrences(
-            of: "\u{001B}\\[[0-9;]*[A-Za-z]",
+            of: "\u{001B}\\[[0-9;:]*[A-Za-z]",
             with: "",
             options: .regularExpression
         )
@@ -259,7 +360,7 @@ struct Activity: Identifiable {
         self.date = date
     }
 
-    enum Outcome: String {
+    enum Outcome: String, Codable {
         case filed = "Filed"
         case needsReview = "Needs Review"
         case failed = "Failed"

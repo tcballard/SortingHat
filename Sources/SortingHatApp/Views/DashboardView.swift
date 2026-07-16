@@ -28,6 +28,11 @@ struct DashboardView: View {
                     .help("Show Inbox in Finder (⇧⌘I)")
                 Button("Rules", systemImage: "text.badge.checkmark") { openWindow(id: "rules") }
                     .help("Show Sorting Rules (⌥⌘R)")
+                if reviewCount > 0 {
+                    Button("Review", systemImage: "questionmark.folder") { openWindow(id: "review") }
+                        .badge(reviewCount)
+                        .help("Review uncertain files")
+                }
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button(store.isWatching ? "Pause" : "Resume", systemImage: store.isWatching ? "pause.fill" : "play.fill") {
@@ -74,13 +79,9 @@ struct DashboardView: View {
                     .accessibilityLabel("\(reviewCount) files need review")
             }
 
-            Text("\(store.recent.count) recent")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.68))
-                .monospacedDigit()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .background(
             SortingHatTheme.statusSurface(
                 for: colorScheme,
@@ -244,6 +245,10 @@ private struct ActivityDetailView: View {
                 }
                 Spacer()
                 if let fileURL = activity.fileURL {
+                    if activity.outcome == .filed {
+                        Button("Undo") { try? store.undo(activity) }
+                            .controlSize(.small)
+                    }
                     Button("Show in Finder", systemImage: "magnifyingglass") { store.reveal(fileURL) }
                         .controlSize(.small)
                 } else {

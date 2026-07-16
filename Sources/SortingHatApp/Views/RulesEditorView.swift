@@ -5,6 +5,7 @@ struct RulesEditorView: View {
     @State private var rules: [RuleDraft] = []
     @State private var errorMessage: String?
     @State private var hasChanges = false
+    @State private var showingBuilder = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +24,7 @@ struct RulesEditorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                Button("Describe a Plan…", systemImage: "wand.and.sparkles") { showingBuilder = true }
             }
             .padding(18)
 
@@ -78,6 +80,13 @@ struct RulesEditorView: View {
             .padding(14)
         }
         .onAppear(perform: load)
+        .sheet(isPresented: $showingBuilder) {
+            RuleBuilderSheet { plan in
+                rules = plan.compiledRules.map(RuleDraft.init(text:))
+                hasChanges = true
+                showingBuilder = false
+            }
+        }
     }
 
     private func binding(for id: RuleDraft.ID) -> Binding<String> {
@@ -157,6 +166,15 @@ private struct RuleEditorRow: View {
                 .lineLimit(2...5)
                 .accessibilityLabel("Rule \(index + 1)")
 
+            if let destinationPreview {
+                Label(destinationPreview, systemImage: "folder")
+                    .font(.caption)
+                    .foregroundStyle(SortingHatTheme.amber)
+                    .frame(maxWidth: 150, alignment: .leading)
+                    .lineLimit(1)
+                    .help(destinationPreview)
+            }
+
             HStack(spacing: 2) {
                 Button("Move Up", systemImage: "chevron.up", action: moveUp)
                     .disabled(!canMoveUp)
@@ -168,5 +186,73 @@ private struct RuleEditorRow: View {
             .buttonStyle(.borderless)
         }
         .padding(.vertical, 7)
+    }
+
+    private var destinationPreview: String? {
+        let text = rule
+        guard let range = text.range(of: " in ", options: [.caseInsensitive]) else { return nil }
+        let tail = text[range.upperBound...]
+        let destination = tail.split(separator: ",", maxSplits: 1).first.map(String.init)?
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        return destination?.isEmpty == false ? destination : nil
+    }
+}
+
+private struct RuleBuilderSheet: View {
+    let apply: (RulePlan) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var intent = ""
+    @State private var plan: RulePlan?
+    @State private var isGenerating = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack { WizardHatSymbol(size: 32); Text("Describe a filing plan").font(.title2.bold()); Spacer() }
+            Text("The hat will propose destinations and compile them into editable rules. Existing rules change only when you apply the plan.")
+                .foregroundStyle(.secondary)
+            TextEditor(text: $intent)
+                .frame(height: 110)
+                .padding(8)
+                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+            if let plan {
+                Table(plan.routes) {
+                    TableColumn("Files", value: \.fileKinds)
+                    TableColumn("Destination", value: \.folderTemplate)
+                    TableColumn("Organisation", value: \.organisation)
+                }
+                .frame(minHeight: 170)
+                Label(plan.fallback, systemImage: "questionmark.folder").foregroundStyle(.secondary)
+            }
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("The plan could not be built. \(errorMessage)")
+            }
+            HStack {
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Spacer()
+                if isGenerating { ProgressView().controlSize(.small) }
+                Button(plan == nil ? "Build Plan" : "Rebuild") { generate() }
+                    .disabled(intent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating)
+                Button("Use These Rules") { if let plan { apply(plan) } }
+                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(plan == nil)
+            }
+        }
+        .padding(22)
+        .frame(width: 680, height: plan == nil ? 330 : 520)
+    }
+
+    private func generate() {
+        isGenerating = true; errorMessage = nil
+        let request = intent
+        Task {
+            do { plan = try await Task.detached { try RulePlanGenerator().generate(from: request) }.value }
+            catch { errorMessage = error.localizedDescription }
+            isGenerating = false
+        }
     }
 }

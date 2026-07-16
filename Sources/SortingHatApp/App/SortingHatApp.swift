@@ -7,17 +7,26 @@ struct SortingHatMenuApp: App {
 
     var body: some Scene {
         Window("Sorting Hat", id: "dashboard") {
-            DashboardView(store: store)
+            Group {
+                if store.setupRequired { SetupView(store: store) }
+                else { DashboardView(store: store) }
+            }
                 .frame(minWidth: 760, minHeight: 460)
                 .background(AppActionBridge(appDelegate: appDelegate, store: store))
         }
         .defaultSize(width: 980, height: 620)
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
 
         Window("Sorting Rules", id: "rules") {
             RulesEditorView(store: store)
                 .frame(minWidth: 620, minHeight: 420)
         }
         .defaultSize(width: 720, height: 540)
+
+        Window("Needs Review", id: "review") {
+            ReviewQueueView(store: store).frame(minWidth: 700, minHeight: 430)
+        }
+        .defaultSize(width: 820, height: 520)
 
         Settings {
             ModelSettingsView(store: store)

@@ -1,5 +1,6 @@
 import SortingHatCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ModelSettingsView: View {
     let store: HatStore
@@ -14,10 +15,22 @@ struct ModelSettingsView: View {
     @State private var allowApplePCC = false
     @State private var errorMessage: String?
     @State private var savedMessage: String?
+    @State private var inboxURL: URL
+    @State private var outputURL: URL
+    @State private var choosingInbox = false
+    @State private var choosingOutput = false
+
+    init(store: HatStore) {
+        self.store = store
+        _inboxURL = State(initialValue: store.inbox)
+        _outputURL = State(initialValue: store.outputRoot)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             TabView {
+                generalPane
+                    .tabItem { Label("General", systemImage: "folder.badge.gearshape") }
                 providerPane
                     .tabItem { Label("Provider", systemImage: "point.3.connected.trianglepath.dotted") }
                 applePane
@@ -56,12 +69,52 @@ struct ModelSettingsView: View {
         .onChange(of: provider) { savedMessage = nil }
         .onChange(of: appleModel) { savedMessage = nil }
         .onChange(of: allowApplePCC) { savedMessage = nil }
+        .fileImporter(isPresented: $choosingInbox, allowedContentTypes: [.folder]) { result in
+            if case .success(let url) = result { inboxURL = url; saveLocations() }
+        }
+        .fileImporter(isPresented: $choosingOutput, allowedContentTypes: [.folder]) { result in
+            if case .success(let url) = result { outputURL = url; saveLocations() }
+        }
+    }
+
+    private var generalPane: some View {
+        SettingsPane(title: "Files and automation", description: "Choose where files arrive, where the hat files them, and how long activity remains visible.") {
+            Form {
+                LabeledContent("Inbox") {
+                    HStack { Text(inboxURL.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle); Button("Choose…") { choosingInbox = true } }
+                }
+                LabeledContent("Filed output") {
+                    HStack { Text(outputURL.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle); Button("Choose…") { choosingOutput = true } }
+                }
+                Toggle("Launch Sorting Hat at login", isOn: Binding(
+                    get: { store.launchAtLogin },
+                    set: { enabled in store.setLaunchAtLogin(enabled) }
+                ))
+                Stepper("Keep \(store.activityRetention) activity records", value: Binding(
+                    get: { store.activityRetention },
+                    set: { limit in store.setActivityRetention(limit) }
+                ), in: 25...1000, step: 25)
+            }
+            Divider()
+            HStack {
+                Label(store.quickActionInstalled ? "Finder Quick Action installed" : "Send files from Finder’s Quick Actions menu", systemImage: "finder")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(store.quickActionInstalled ? "Installed" : "Install Quick Action") { store.installQuickAction() }
+                    .disabled(store.quickActionInstalled)
+            }
+            HStack {
+                Text("Want to redesign the filing plan?").foregroundStyle(.secondary)
+                Spacer()
+                Button("Run Setup Again…") { store.restartSetup() }
+            }
+        }
     }
 
     private var providerPane: some View {
         SettingsPane(
             title: "Sorting intelligence",
-            description: "Choose who decides how files are renamed and filed. Automatic keeps the system model first and uses only providers you configure."
+            description: "Choose who decides how files are renamed and filed. Automatic is recommended and prefers private processing on this Mac."
         ) {
             Form {
                 Picker("Provider", selection: $provider) {
@@ -78,6 +131,9 @@ struct ModelSettingsView: View {
             Label(providerHelp, systemImage: providerSymbol)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            Label(privacySummary, systemImage: provider == .openai ? "network" : "lock.shield")
+                .font(.caption)
+                .foregroundStyle(provider == .openai ? .orange : .secondary)
         }
     }
 
@@ -183,6 +239,11 @@ struct ModelSettingsView: View {
         }
     }
 
+    private func saveLocations() {
+        do { try store.saveLocations(inbox: inboxURL, output: outputURL); errorMessage = nil; savedMessage = "Locations saved" }
+        catch { savedMessage = nil; errorMessage = error.localizedDescription }
+    }
+
     private var providerHelp: String {
         switch provider {
         case .automatic: "Tries Apple first, then configured Ollama and OpenAI fallbacks. Private Cloud Compute still requires explicit permission."
@@ -198,6 +259,15 @@ struct ModelSettingsView: View {
         case .apple: "cpu"
         case .ollama: "desktopcomputer"
         case .openai: "cloud"
+        }
+    }
+
+    private var privacySummary: String {
+        switch provider {
+        case .automatic: "Uses on-device Apple Intelligence first. Network providers are used only when configured."
+        case .apple: allowApplePCC ? "Apple processing may use Private Cloud Compute with your permission." : "Apple processing remains on this Mac."
+        case .ollama: "File context is sent only to the Ollama server address you configure."
+        case .openai: "Extracted file context may be sent to OpenAI."
         }
     }
 
