@@ -16,31 +16,26 @@ struct RulePlanGenerator: Sendable {
         try Self.schema.write(to: schemaURL, options: .atomic)
         defer { try? FileManager.default.removeItem(at: schemaURL) }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = [
-            "respond", "--model", "system",
-            "--instructions", Self.instructions,
-            "--schema", schemaURL.path,
-            "--no-stream", "--greedy",
-            request,
-        ]
-        let output = Pipe()
-        let errors = Pipe()
-        process.standardOutput = output
-        process.standardError = errors
-        try process.run()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else {
-            let message = String(data: errors.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "Rule generation failed."
-            let detail = Self.strippingTerminalFormatting(from: message)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if detail.localizedCaseInsensitiveContains("invalid schema") {
-                throw RulePlanError.unavailable("The hat couldn’t prepare the rule builder. Please try again after updating Sorting Hat.")
-            }
-            throw RulePlanError.unavailable(detail.isEmpty ? "The hat couldn’t build that plan. Try describing it another way." : detail)
+        var response = try run(request: request, schemaURL: schemaURL)
+        for retry in 0..<2 where response.isTransientFailure {
+            Thread.sleep(forTimeInterval: 0.6 * Double(retry + 1))
+            response = try run(request: request, schemaURL: schemaURL)
         }
-        var plan = try JSONDecoder().decode(RulePlan.self, from: output.fileHandleForReading.readDataToEndOfFile())
+        guard response.status == 0 else {
+            if response.detail.localizedCaseInsensitiveContains("invalid schema") {
+                throw RulePlanError.unavailable("The hat couldn’t prepare the rule builder. Please update Sorting Hat and try again.")
+            }
+            if response.isTransientFailure {
+                throw RulePlanError.unavailable("Apple Intelligence is temporarily unavailable. Wait a moment, then build the rules again. Your existing rules are unchanged.")
+            }
+            if response.detail.localizedCaseInsensitiveContains("SensitiveContentAnalysisML") {
+                throw RulePlanError.unavailable("Apple Intelligence couldn’t process that wording. Try a shorter description of the files and destination. Your existing rules are unchanged.")
+            }
+            throw RulePlanError.unavailable(response.detail.isEmpty
+                ? "The hat couldn’t build that plan. Try describing it another way."
+                : response.detail)
+        }
+        var plan = try JSONDecoder().decode(RulePlan.self, from: response.output)
         plan.routes.removeAll { route in
             let folder = route.folderTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
             return folder.caseInsensitiveCompare("Inbox") == .orderedSame
@@ -51,8 +46,49 @@ struct RulePlanGenerator: Sendable {
         return plan
     }
 
+    private func run(request: String, schemaURL: URL) throws -> Response {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = [
+            "respond", "--model", "system",
+            "--instructions", Self.instructions,
+            "--guardrails", "permissive-content-transformations",
+            "--schema", schemaURL.path,
+            "--no-stream", "--greedy",
+            request,
+        ]
+        let output = Pipe()
+        let errors = Pipe()
+        process.standardOutput = output
+        process.standardError = errors
+        try process.run()
+        process.waitUntilExit()
+        return Response(
+            status: process.terminationStatus,
+            output: output.fileHandleForReading.readDataToEndOfFile(),
+            error: errors.fileHandleForReading.readDataToEndOfFile()
+        )
+    }
+
+    private struct Response {
+        let status: Int32
+        let output: Data
+        let error: Data
+
+        var detail: String {
+            let value = String(data: error, encoding: .utf8) ?? ""
+            return RulePlanGenerator.strippingTerminalFormatting(from: value)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        var isTransientFailure: Bool {
+            detail.localizedCaseInsensitiveContains("LanguageModelError error -1")
+                || detail.localizedCaseInsensitiveContains("ModelManagerError error 1008")
+        }
+    }
+
     private static let instructions = """
-    Turn the person's filing preferences into a concise, safe Sorting Hat plan. Every route needs a human-readable name, the kinds of files it matches, a relative destination folder template, an organisation description, and useful Finder tags. Never output absolute paths, tilde paths, or dot/dot-dot components. Include a short descriptive renaming policy. The fallback must leave uncertain files in the Inbox for review. Do not use a generic Sorted folder.
+    Turn the person's filing preferences into a concise, safe Sorting Hat plan. Every route needs a human-readable name, the kinds of files it matches, a relative destination folder template, an organisation description, and useful Finder tags. Use placeholders such as {project}, {client}, {year}, or {month} when the destination depends on file contents or metadata. Never invent concrete project, client, merchant, or category names. Never output absolute paths, tilde paths, or dot/dot-dot components. Include a short descriptive renaming policy. The fallback must leave uncertain files in the Inbox for review. Do not use a generic Sorted folder.
     """
 
     private static let schema = Data(#"""
