@@ -9,6 +9,7 @@ final class HatStore {
     var isProcessing = false
     var status = "Ready"
     var recent: [Activity] = []
+    var inboxItems: [InboxItem] = []
     var setupRequired = false
     var launchAtLogin = SMAppService.mainApp.status == .enabled
     var quickActionInstalled = false
@@ -33,6 +34,7 @@ final class HatStore {
             outputRoot = Self.expandedURL(config.output)
         }
         recent = ledger.load()
+        refreshInbox()
         if !setupRequired { start() }
     }
 
@@ -56,7 +58,7 @@ final class HatStore {
     func processNow() async {
         guard !isProcessing else { return }
         isProcessing = true
-        defer { isProcessing = false }
+        defer { isProcessing = false; refreshInbox() }
         do {
             let config = try ConfigLoader.load(configURL)
             let configuredInbox = Self.expandedURL(config.inbox)
@@ -114,6 +116,7 @@ final class HatStore {
     }
 
     func openInbox() { NSWorkspace.shared.open(inbox) }
+    func open(_ url: URL) { NSWorkspace.shared.open(url) }
     func reveal(_ url: URL) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
     func loadRules() throws -> [String] { try ConfigLoader.load(configURL).rules }
 
@@ -144,6 +147,7 @@ final class HatStore {
         self.inbox = inbox.standardizedFileURL
         outputRoot = output.standardizedFileURL
         try FileManager.default.createDirectory(at: self.inbox, withIntermediateDirectories: true)
+        refreshInbox()
     }
 
     func restartSetup() {
@@ -281,6 +285,27 @@ final class HatStore {
 
     private var ledger: ActivityLedger { ActivityLedger(url: activityURL, retentionLimit: activityRetention) }
 
+    private func refreshInbox() {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isHiddenKey, .contentModificationDateKey, .fileSizeKey, .contentTypeKey]
+        let urls = (try? FileManager.default.contentsOfDirectory(
+            at: inbox,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles]
+        )) ?? []
+        inboxItems = urls.compactMap { url in
+            guard url.lastPathComponent != "sortinghat.conf",
+                  let values = try? url.resourceValues(forKeys: keys),
+                  values.isRegularFile == true else { return nil }
+            return InboxItem(
+                url: url,
+                modified: values.contentModificationDate,
+                size: values.fileSize.map(Int64.init),
+                kind: values.contentType?.localizedDescription ?? url.pathExtension.uppercased()
+            )
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     private static func displayPath(_ url: URL) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return url.path == home ? "~" : url.path.replacingOccurrences(of: home + "/", with: "~/")
@@ -315,6 +340,16 @@ final class HatStore {
       - Put screenshots in Screenshots/YYYY-MM and tag them screenshot.
       - Put everything else in Files/YYYY-MM and add one useful topic tag.
     """
+}
+
+struct InboxItem: Identifiable, Hashable {
+    var id: URL { url }
+    let url: URL
+    let modified: Date?
+    let size: Int64?
+    let kind: String
+
+    var name: String { url.lastPathComponent }
 }
 
 private extension URL {

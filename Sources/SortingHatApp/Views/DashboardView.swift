@@ -8,24 +8,41 @@ struct DashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
     @State private var selection: Activity.ID?
+    @State private var inboxSelection: InboxItem.ID?
+    @State private var section: DashboardSection = .inbox
 
     private var selectedActivity: Activity? {
         store.recent.first { $0.id == selection }
+    }
+
+    private var selectedInboxItem: InboxItem? {
+        store.inboxItems.first { $0.id == inboxSelection }
     }
 
     var body: some View {
         VStack(spacing: 0) {
             statusStrip
             Divider()
-            activityContent
+            if section == .inbox { inboxContent }
+            else { activityContent }
         }
         .background(SortingHatTheme.canvas(for: colorScheme))
         .tint(SortingHatTheme.amber)
         .navigationTitle("Sorting Hat")
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("View", selection: $section) {
+                    Text("Inbox").tag(DashboardSection.inbox)
+                    Text("Activity").tag(DashboardSection.activity)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 190)
+                .accessibilityLabel("Sorting Hat view")
+            }
             ToolbarItemGroup(placement: .navigation) {
-                Button("Show in Finder", systemImage: "folder") { store.openInbox() }
-                    .help("Show Inbox in Finder (⇧⌘I)")
+                Button("Reveal Inbox in Finder", systemImage: "folder") { store.openInbox() }
+                    .help("Reveal Inbox in Finder (⇧⌘I)")
                 Button("Rules", systemImage: "text.badge.checkmark") { openWindow(id: "rules") }
                     .help("Show Sorting Rules (⌥⌘R)")
                 if reviewCount > 0 {
@@ -45,6 +62,60 @@ struct DashboardView: View {
                 .disabled(store.isProcessing)
                 .help("Sort Now (⇧⌘S)")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var inboxContent: some View {
+        if store.inboxItems.isEmpty {
+            ContentUnavailableView {
+                Label("Inbox is empty", systemImage: "tray")
+            } description: {
+                Text("Drop files into the Inbox and they’ll appear here while the hat considers them.")
+            } actions: {
+                Button("Reveal Inbox in Finder") { store.openInbox() }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            VSplitView {
+                Table(store.inboxItems, selection: $inboxSelection) {
+                    TableColumn("Name") { item in
+                        Label(item.name, systemImage: icon(for: item.url))
+                            .lineLimit(1)
+                            .help(item.name)
+                    }
+                    .width(min: 220, ideal: 360)
+
+                    TableColumn("Kind", value: \.kind)
+                        .width(min: 110, ideal: 160)
+
+                    TableColumn("Size") { item in
+                        Text(item.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "—")
+                            .monospacedDigit()
+                    }
+                    .width(82)
+
+                    TableColumn("Modified") { item in
+                        if let modified = item.modified { Text(modified, style: .relative) }
+                        else { Text("—").foregroundStyle(.secondary) }
+                    }
+                    .width(min: 90, ideal: 120)
+                }
+                .accessibilityLabel("Files waiting in the Inbox")
+
+                InboxDetailView(item: selectedInboxItem ?? store.inboxItems.first!, store: store)
+                    .frame(minHeight: 92, idealHeight: 108, maxHeight: 132)
+            }
+        }
+    }
+
+    private func icon(for url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "png", "jpg", "jpeg", "heic", "gif", "tiff", "webp": "photo"
+        case "pdf": "doc.richtext"
+        case "txt", "md", "rtf": "doc.text"
+        case "csv", "xls", "xlsx": "tablecells"
+        default: "doc"
         }
     }
 
@@ -153,6 +224,35 @@ struct DashboardView: View {
         case .needsReview: .orange
         case .failed: .red
         }
+    }
+}
+
+private enum DashboardSection: Hashable { case inbox, activity }
+
+private struct InboxDetailView: View {
+    let item: InboxItem
+    let store: HatStore
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: item.url.path))
+                .resizable()
+                .scaledToFit()
+                .frame(width: 42, height: 42)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.name).font(.headline).lineLimit(1).help(item.name)
+                Text("Waiting in the Inbox · \(item.kind)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Reveal", systemImage: "magnifyingglass") { store.reveal(item.url) }
+            Button("Open", systemImage: "arrow.up.forward.app") { store.open(item.url) }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+        }
+        .padding(14)
     }
 }
 
