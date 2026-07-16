@@ -33,16 +33,6 @@ struct DashboardView: View {
         .tint(SortingHatTheme.amber)
         .navigationTitle("Sorting Hat")
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("View", selection: $section) {
-                    Text("Inbox").tag(DashboardSection.inbox)
-                    Text("Activity").tag(DashboardSection.activity)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 190)
-                .accessibilityLabel("Sorting Hat view")
-            }
             ToolbarItemGroup(placement: .navigation) {
                 Button("Add Files", systemImage: "plus") { choosingFiles = true }
                     .help("Add Files to the Inbox")
@@ -171,6 +161,23 @@ struct DashboardView: View {
                     .accessibilityLabel("\(reviewCount) files need review")
             }
 
+            HStack(spacing: 4) {
+                DashboardSectionButton(
+                    title: "Inbox",
+                    symbol: "tray",
+                    selected: section == .inbox,
+                    action: { select(.inbox) }
+                )
+                DashboardSectionButton(
+                    title: "Activity",
+                    symbol: "clock.arrow.circlepath",
+                    selected: section == .activity,
+                    action: { select(.activity) }
+                )
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Sorting Hat view")
+
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -239,6 +246,11 @@ struct DashboardView: View {
 
     private var reviewCount: Int { store.recent.filter { $0.outcome == .needsReview }.count }
 
+    private func select(_ newSection: DashboardSection) {
+        if reduceMotion { section = newSection }
+        else { withAnimation(.easeOut(duration: 0.16)) { section = newSection } }
+    }
+
     private func color(for outcome: Activity.Outcome) -> Color {
         switch outcome {
         case .filed: .green
@@ -249,6 +261,34 @@ struct DashboardView: View {
 }
 
 private enum DashboardSection: Hashable { case inbox, activity }
+
+private struct DashboardSectionButton: View {
+    let title: String
+    let symbol: String
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .font(.caption.weight(selected ? .semibold : .medium))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .foregroundStyle(selected ? SortingHatTheme.amberBright : .white.opacity(0.68))
+                .background(selected ? .white.opacity(0.09) : .clear, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(alignment: .bottom) {
+                    if selected {
+                        Capsule()
+                            .fill(SortingHatTheme.amberBright)
+                            .frame(height: 2)
+                            .padding(.horizontal, 8)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
 
 private struct InboxDetailView: View {
     let item: InboxItem
