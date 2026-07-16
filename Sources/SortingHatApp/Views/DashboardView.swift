@@ -34,8 +34,10 @@ struct DashboardView: View {
         .navigationTitle("Sorting Hat")
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
-                Button("Add Files", systemImage: "plus") { choosingFiles = true }
-                    .help("Add Files to the Inbox")
+                if section == .inbox {
+                    Button("Add Files", systemImage: "plus") { choosingFiles = true }
+                        .help("Add Files to the Inbox")
+                }
                 Button("Rules", systemImage: "text.badge.checkmark") { openWindow(id: "rules") }
                     .help("Show Sorting Rules (⌥⌘R)")
                 if reviewCount > 0 {
@@ -193,7 +195,6 @@ struct DashboardView: View {
     private var activityContent: some View {
         if store.recent.isEmpty {
             EmptySortingView(
-                showInbox: { choosingFiles = true },
                 reviewRules: { openWindow(id: "rules") }
             )
         } else {
@@ -317,7 +318,6 @@ private struct InboxDetailView: View {
 }
 
 private struct EmptySortingView: View {
-    let showInbox: () -> Void
     let reviewRules: () -> Void
 
     var body: some View {
@@ -325,18 +325,17 @@ private struct EmptySortingView: View {
             SortingTrailGraphic()
 
             VStack(spacing: 6) {
-                Text("The hat is listening")
+                Text("No activity yet")
                     .font(.title2.weight(.semibold))
-                Text("Drop files into the Inbox. They’ll be renamed and filed by your rules.")
+                Text("Files the hat has renamed, filed, or held for review will appear here.")
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 430)
             }
 
             HStack {
-                Button("Add Files…") { showInbox() }
-                    .buttonStyle(.borderedProminent)
                 Button("Review Rules") { reviewRules() }
+                    .buttonStyle(.borderedProminent)
             }
         }
         .padding(40)
