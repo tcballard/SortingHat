@@ -24,7 +24,7 @@ struct RulesEditorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                Button("Describe a Plan…", systemImage: "wand.and.sparkles") { showingBuilder = true }
+                Button("Describe Rules to Add…", systemImage: "wand.and.sparkles") { showingBuilder = true }
             }
             .padding(18)
 
@@ -82,10 +82,21 @@ struct RulesEditorView: View {
         .onAppear(perform: load)
         .sheet(isPresented: $showingBuilder) {
             RuleBuilderSheet { plan in
-                rules = plan.compiledRules.map(RuleDraft.init(text:))
+                let insertionIndex = catchAllRuleIndex ?? rules.endIndex
+                rules.insert(contentsOf: plan.routeRules.map(RuleDraft.init(text:)), at: insertionIndex)
                 hasChanges = true
                 showingBuilder = false
             }
+        }
+    }
+
+    private var catchAllRuleIndex: Int? {
+        rules.lastIndex { draft in
+            let rule = draft.text.lowercased()
+            return rule.contains("everything else")
+                || rule.contains("anything else")
+                || rule.contains("otherwise")
+                || rule.contains("uncertain")
         }
     }
 
@@ -208,8 +219,8 @@ private struct RuleBuilderSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack { WizardHatSymbol(size: 32); Text("Describe a filing plan").font(.title2.bold()); Spacer() }
-            Text("The hat will propose destinations and compile them into editable rules. Existing rules change only when you apply the plan.")
+            HStack { WizardHatSymbol(size: 32); Text("Describe rules to add").font(.title2.bold()); Spacer() }
+            Text("The hat will propose new destination rules. Your existing filename, destination, and fallback rules stay unchanged.")
                 .foregroundStyle(.secondary)
             TextEditor(text: $intent)
                 .frame(height: 110)
@@ -222,7 +233,8 @@ private struct RuleBuilderSheet: View {
                     TableColumn("Organisation", value: \.organisation)
                 }
                 .frame(minHeight: 170)
-                Label(plan.fallback, systemImage: "questionmark.folder").foregroundStyle(.secondary)
+                Label("These will be inserted before your existing catch-all rule.", systemImage: "text.insert")
+                    .foregroundStyle(.secondary)
             }
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -238,7 +250,7 @@ private struct RuleBuilderSheet: View {
                 if isGenerating { ProgressView().controlSize(.small) }
                 Button(plan == nil ? "Build Plan" : "Rebuild") { generate() }
                     .disabled(intent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating)
-                Button("Use These Rules") { if let plan { apply(plan) } }
+                Button("Add Proposed Rules") { if let plan { apply(plan) } }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(plan == nil)
             }
         }

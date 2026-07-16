@@ -6,15 +6,17 @@ struct RulePlan: Codable, Equatable, Sendable {
     var routes: [RoutePlan]
     var fallback: String
 
+    var routeRules: [String] {
+        routes.map { route in
+            var rule = "Put \(route.fileKinds) in \(route.folderTemplate)"
+            if !route.organisation.isEmpty { rule += ", organised by \(route.organisation)" }
+            if !route.tags.isEmpty { rule += ", and tag them \(route.tags.joined(separator: " and "))" }
+            return rule + "."
+        }
+    }
+
     var compiledRules: [String] {
-        [renamePolicy]
-            + routes.map { route in
-                var rule = "Put \(route.fileKinds) in \(route.folderTemplate)"
-                if !route.organisation.isEmpty { rule += ", organised by \(route.organisation)" }
-                if !route.tags.isEmpty { rule += ", and tag them \(route.tags.joined(separator: " and "))" }
-                return rule + "."
-            }
-            + [fallback]
+        [renamePolicy] + routeRules + [fallback]
     }
 }
 
