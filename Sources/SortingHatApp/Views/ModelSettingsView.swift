@@ -95,14 +95,6 @@ struct ModelSettingsView: View {
                     set: { limit in store.setActivityRetention(limit) }
                 ), in: 25...1000, step: 25)
             }
-            Divider()
-            HStack {
-                Label(store.quickActionInstalled ? "Finder Quick Action installed" : "Send files from Finder’s Quick Actions menu", systemImage: "finder")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(store.quickActionInstalled ? "Installed" : "Install Quick Action") { store.installQuickAction() }
-                    .disabled(store.quickActionInstalled)
-            }
             HStack {
                 Text("Want to redesign the filing plan?").foregroundStyle(.secondary)
                 Spacer()

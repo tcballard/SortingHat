@@ -12,7 +12,6 @@ final class HatStore {
     var inboxItems: [InboxItem] = []
     var setupRequired = false
     var launchAtLogin = SMAppService.mainApp.status == .enabled
-    var quickActionInstalled = false
     var activityRetention = UserDefaults.standard.object(forKey: "activityRetention") as? Int ?? 200
     var inbox: URL
     var outputRoot: URL
@@ -27,7 +26,6 @@ final class HatStore {
         configURL = home.appending(path: "SortingHat/sortinghat.conf")
         activityURL = home.appending(path: "SortingHat/activity-history.json")
         setupRequired = !FileManager.default.fileExists(atPath: configURL.path)
-        quickActionInstalled = Self.quickActionURL.fileExists
         bootstrap()
         if let config = try? ConfigLoader.load(configURL) {
             inbox = Self.expandedURL(config.inbox)
@@ -115,9 +113,29 @@ final class HatStore {
         } catch { status = error.localizedDescription }
     }
 
-    func openInbox() { NSWorkspace.shared.open(inbox) }
     func open(_ url: URL) { NSWorkspace.shared.open(url) }
-    func reveal(_ url: URL) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+    func addToInbox(_ urls: [URL]) throws {
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        for source in urls {
+            let accessing = source.startAccessingSecurityScopedResource()
+            defer { if accessing { source.stopAccessingSecurityScopedResource() } }
+            let values = try source.resourceValues(forKeys: [.isRegularFileKey])
+            guard values.isRegularFile == true else { continue }
+            var destination = inbox.appending(path: source.lastPathComponent)
+            if destination.standardizedFileURL == source.standardizedFileURL { continue }
+            let stem = destination.deletingPathExtension().lastPathComponent
+            let ext = destination.pathExtension
+            var copy = 2
+            while FileManager.default.fileExists(atPath: destination.path) {
+                let name = ext.isEmpty ? "\(stem)-\(copy)" : "\(stem)-\(copy).\(ext)"
+                destination = inbox.appending(path: name)
+                copy += 1
+            }
+            try FileManager.default.copyItem(at: source, to: destination)
+        }
+        refreshInbox()
+        status = "Files added to the Inbox"
+    }
     func loadRules() throws -> [String] { try ConfigLoader.load(configURL).rules }
 
     func saveRules(_ rules: [String]) throws {
@@ -238,28 +256,6 @@ final class HatStore {
         } catch { status = "Launch at login: \(error.localizedDescription)"; launchAtLogin = !enabled }
     }
 
-    func installQuickAction() {
-        guard let script = Bundle.main.url(forResource: "install_quick_action", withExtension: "sh") else {
-            status = "Quick Action installer is missing from this build"
-            return
-        }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [script.path, inbox.path]
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                status = "Quick Action installation failed"
-                return
-            }
-            quickActionInstalled = true
-            status = "Finder Quick Action Installed"
-        } catch {
-            status = "Quick Action: \(error.localizedDescription)"
-        }
-    }
-
     private func bootstrap() {
         try? FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
         guard !FileManager.default.fileExists(atPath: configURL.path) else { return }
@@ -315,11 +311,6 @@ final class HatStore {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let path = url.standardizedFileURL.path
         return path == home ? "~" : path.replacingOccurrences(of: home + "/", with: "~/")
-    }
-
-    private static var quickActionURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: "Library/Services/Send to Sorting Hat.workflow", directoryHint: .isDirectory)
     }
 
     private static let example = """

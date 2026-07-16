@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct DashboardView: View {
     let store: HatStore
@@ -10,6 +11,8 @@ struct DashboardView: View {
     @State private var selection: Activity.ID?
     @State private var inboxSelection: InboxItem.ID?
     @State private var section: DashboardSection = .inbox
+    @State private var choosingFiles = false
+    @State private var importError: String?
 
     private var selectedActivity: Activity? {
         store.recent.first { $0.id == selection }
@@ -41,8 +44,8 @@ struct DashboardView: View {
                 .accessibilityLabel("Sorting Hat view")
             }
             ToolbarItemGroup(placement: .navigation) {
-                Button("Reveal Inbox in Finder", systemImage: "folder") { store.openInbox() }
-                    .help("Reveal Inbox in Finder (⇧⌘I)")
+                Button("Add Files", systemImage: "plus") { choosingFiles = true }
+                    .help("Add Files to the Inbox")
                 Button("Rules", systemImage: "text.badge.checkmark") { openWindow(id: "rules") }
                     .help("Show Sorting Rules (⌥⌘R)")
                 if reviewCount > 0 {
@@ -63,22 +66,35 @@ struct DashboardView: View {
                 .help("Sort Now (⇧⌘S)")
             }
         }
+        .fileImporter(isPresented: $choosingFiles, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            do { try store.addToInbox(result.get()); importError = nil }
+            catch { importError = error.localizedDescription }
+        }
+        .alert("Files couldn’t be added", isPresented: Binding(
+            get: { importError != nil },
+            set: { if !$0 { importError = nil } }
+        )) {
+            Button("OK", role: .cancel) { importError = nil }
+        } message: {
+            Text(importError ?? "Try adding the files again.")
+        }
     }
 
     @ViewBuilder
     private var inboxContent: some View {
-        if store.inboxItems.isEmpty {
-            ContentUnavailableView {
-                Label("Inbox is empty", systemImage: "tray")
-            } description: {
-                Text("Drop files into the Inbox and they’ll appear here while the hat considers them.")
-            } actions: {
-                Button("Reveal Inbox in Finder") { store.openInbox() }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            VSplitView {
-                Table(store.inboxItems, selection: $inboxSelection) {
+        Group {
+            if store.inboxItems.isEmpty {
+                ContentUnavailableView {
+                    Label("Inbox is empty", systemImage: "tray")
+                } description: {
+                    Text("Drop files here or add them from this Mac. They’ll appear while the hat considers them.")
+                } actions: {
+                    Button("Add Files…") { choosingFiles = true }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VSplitView {
+                    Table(store.inboxItems, selection: $inboxSelection) {
                     TableColumn("Name") { item in
                         Label(item.name, systemImage: icon(for: item.url))
                             .lineLimit(1)
@@ -100,12 +116,17 @@ struct DashboardView: View {
                         else { Text("—").foregroundStyle(.secondary) }
                     }
                     .width(min: 90, ideal: 120)
-                }
-                .accessibilityLabel("Files waiting in the Inbox")
+                    }
+                    .accessibilityLabel("Files waiting in the Inbox")
 
-                InboxDetailView(item: selectedInboxItem ?? store.inboxItems.first!, store: store)
-                    .frame(minHeight: 92, idealHeight: 108, maxHeight: 132)
+                    InboxDetailView(item: selectedInboxItem ?? store.inboxItems.first!, store: store)
+                        .frame(minHeight: 92, idealHeight: 108, maxHeight: 132)
+                }
             }
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            do { try store.addToInbox(urls); importError = nil; return true }
+            catch { importError = error.localizedDescription; return false }
         }
     }
 
@@ -165,7 +186,7 @@ struct DashboardView: View {
     private var activityContent: some View {
         if store.recent.isEmpty {
             EmptySortingView(
-                showInbox: store.openInbox,
+                showInbox: { choosingFiles = true },
                 reviewRules: { openWindow(id: "rules") }
             )
         } else {
@@ -247,7 +268,6 @@ private struct InboxDetailView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Reveal", systemImage: "magnifyingglass") { store.reveal(item.url) }
             Button("Open", systemImage: "arrow.up.forward.app") { store.open(item.url) }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
@@ -274,7 +294,7 @@ private struct EmptySortingView: View {
             }
 
             HStack {
-                Button("Show Inbox") { showInbox() }
+                Button("Add Files…") { showInbox() }
                     .buttonStyle(.borderedProminent)
                 Button("Review Rules") { reviewRules() }
             }
@@ -349,10 +369,12 @@ private struct ActivityDetailView: View {
                         Button("Undo") { try? store.undo(activity) }
                             .controlSize(.small)
                     }
-                    Button("Show in Finder", systemImage: "magnifyingglass") { store.reveal(fileURL) }
+                    Button("Open", systemImage: "arrow.up.forward.app") { store.open(fileURL) }
                         .controlSize(.small)
                 } else {
-                    Button("Show in Finder", systemImage: "folder") { store.openInbox() }
+                    Text("File is no longer available")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .controlSize(.small)
                 }
             }

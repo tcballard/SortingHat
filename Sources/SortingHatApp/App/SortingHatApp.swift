@@ -42,8 +42,6 @@ private struct SortingHatCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("Show Inbox in Finder") { store.openInbox() }
-                .keyboardShortcut("i", modifiers: [.command, .shift])
             Button("Show Sorting Rules") { openWindow(id: "rules") }
                 .keyboardShortcut("r", modifiers: [.command, .option])
             Divider()
@@ -137,7 +135,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(item("Open Inbox", action: #selector(openInboxWindow)))
         menu.addItem(item("Show Sorting Rules", action: #selector(openRulesWindow)))
-        menu.addItem(item("Show Inbox in Finder", action: #selector(showInboxInFinder)))
         menu.addItem(item("Settings…", action: #selector(showSettings), key: ",", modifiers: [.command]))
         menu.addItem(.separator())
         menu.addItem(item("Quit Sorting Hat", action: #selector(quit)))
@@ -206,7 +203,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func openInboxWindow() { showWindow("dashboard") }
     @objc private func openRulesWindow() { showWindow("rules") }
-    @objc private func showInboxInFinder() { store?.openInbox() }
     @objc private func showSettings() {
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         NSApp.activate(ignoringOtherApps: true)

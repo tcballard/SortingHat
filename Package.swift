@@ -11,11 +11,7 @@ let package = Package(
     targets: [
         .target(name: "SortingHatCore"),
         .executableTarget(name: "SortingHat", dependencies: ["SortingHatCore"]),
-        .executableTarget(
-            name: "SortingHatApp",
-            dependencies: ["SortingHatCore"],
-            resources: [.copy("Resources/install_quick_action.sh")]
-        ),
+        .executableTarget(name: "SortingHatApp", dependencies: ["SortingHatCore"]),
         .testTarget(
             name: "SortingHatTests",
             dependencies: ["SortingHatCore"],

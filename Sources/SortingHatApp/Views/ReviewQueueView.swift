@@ -37,7 +37,7 @@ struct ReviewQueueView: View {
                     }
                     if let errorMessage { Label(errorMessage, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red) }
                     HStack {
-                        Button("Show in Finder") { if let url = selected.fileURL { store.reveal(url) } }
+                        Button("Open File") { if let url = selected.fileURL { store.open(url) } }
                         Spacer()
                         Button("File Correctly") { resolve(selected) }
                             .buttonStyle(.borderedProminent)
