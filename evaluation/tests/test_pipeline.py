@@ -6,7 +6,8 @@ import pytest
 
 from sortinghat_evaluation.bounded_tools import MAX_SEGMENT_CHARACTERS, ToolContext, bounded_json
 from sortinghat_evaluation.pipeline import (Variant, assess_tool_evidence, compare_artifacts,
-                                            run_pipeline, score, summarize, validate_inputs)
+                                            assess_tool_results, classify_error, run_pipeline, score,
+                                            summarize, validate_inputs)
 
 
 class FakeBackend:
@@ -131,3 +132,40 @@ def test_rejects_tools_on_unsupported_provider():
     prompts = {"version": 1, "prompts": {"p": {}}}
     with pytest.raises(ValueError, match="only by the system"):
         validate_inputs(corpus, matrix, prompts)
+
+
+def test_classifies_environment_and_unsupported_failures():
+    assert classify_error("GenerationError: CriticalMemoryPressure") == "infrastructure"
+    assert classify_error("ValueError: tool calling is unsupported by the fm CLI transport") == "unsupported_transport"
+    assert classify_error("ValueError: malformed output") == "generation"
+    assert classify_error("TimeoutError: model attempt exceeded 20 seconds") == "infrastructure"
+
+
+def test_tool_evidence_is_inconclusive_when_model_infrastructure_fails():
+    case = {"id": "r1", "path": "receipt.txt", "kind": "receipt", "expected": {
+        "folders": ["Receipts"], "filename_contains": [], "tags": [], "abstain": False}}
+    baseline = score(case, Variant("baseline", "p", "system", "general"), "test", 10,
+                     None, "GenerationError: CriticalMemoryPressure")
+    candidate = score(case, Variant("candidate", "p", "system", "general", ("file_metadata",)),
+                      "test", 10, None, "GenerationError: CriticalMemoryPressure")
+    evidence = assess_tool_results([baseline, candidate], {"baseline_variant": "baseline"})
+    assert evidence["status"] == "inconclusive"
+    assert evidence["accepted"] == []
+
+
+def test_tool_evidence_isolated_to_candidate_with_infrastructure_failure():
+    case = {"id": "r1", "path": "receipt.txt", "kind": "receipt", "expected": {
+        "folders": ["Receipts"], "filename_contains": [], "tags": [], "abstain": False}}
+    baseline = score(case, Variant("baseline", "p", "system", "general"), "test", 100,
+                     {"filename": "receipt.txt", "folder": "Files", "tags": [], "reason": "x"}, None)
+    useful = score(case, Variant("useful", "p", "system", "general", ("destination_catalog",)),
+                   "test", 200, {"filename": "receipt.txt", "folder": "Receipts", "tags": [], "reason": "x"}, None,
+                   {"destination_catalog": 1})
+    broken = score(case, Variant("broken", "p", "system", "general", ("taxonomy_lookup",)),
+                   "test", 10, None, "GenerationError: CriticalMemoryPressure")
+    evidence = assess_tool_results([baseline, useful, broken], {
+        "baseline_variant": "baseline", "minimum_accuracy_uplift": 0.02,
+        "maximum_failure_rate_increase": 0, "maximum_latency_increase_ms": 500,
+    })
+    assert evidence["accepted"] == ["useful"]
+    assert evidence["candidates"][1]["status"] == "inconclusive"
