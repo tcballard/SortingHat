@@ -367,18 +367,23 @@ public struct FMAnalyzer: FileAnalyzing, BatchFileAnalyzing {
         "decisions": {
           "type": "array",
           "items": {
-            "required": ["source_id", "filename", "folder", "tags", "reason"],
-            "additionalProperties": false,
-            "x-order": ["source_id", "filename", "folder", "tags", "reason"],
-            "type": "object",
-            "title": "BatchDecision",
-            "properties": {
-              "source_id": { "type": "string" },
-              "filename": { "type": "string" },
-              "folder": { "type": "string" },
-              "tags": { "type": "array", "items": { "type": "string" } },
-              "reason": { "type": "string" }
-            }
+            "$ref": "#/$defs/BatchDecision"
+          }
+        }
+      },
+      "$defs": {
+        "BatchDecision": {
+          "required": ["source_id", "filename", "folder", "tags", "reason"],
+          "additionalProperties": false,
+          "x-order": ["source_id", "filename", "folder", "tags", "reason"],
+          "type": "object",
+          "title": "BatchDecision",
+          "properties": {
+            "source_id": { "type": "string" },
+            "filename": { "type": "string" },
+            "folder": { "type": "string" },
+            "tags": { "type": "array", "items": { "type": "string" } },
+            "reason": { "type": "string" }
           }
         }
       }

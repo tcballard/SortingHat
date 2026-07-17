@@ -310,8 +310,11 @@ struct SortingHatTests {
         let properties = try #require(root["properties"] as? [String: Any])
         let decisions = try #require(properties["decisions"] as? [String: Any])
         let item = try #require(decisions["items"] as? [String: Any])
-        #expect(item["title"] as? String == "BatchDecision")
-        #expect(item["x-order"] as? [String] == ["source_id", "filename", "folder", "tags", "reason"])
+        #expect(item["$ref"] as? String == "#/$defs/BatchDecision")
+        let definitions = try #require(root["$defs"] as? [String: Any])
+        let decision = try #require(definitions["BatchDecision"] as? [String: Any])
+        #expect(decision["title"] as? String == "BatchDecision")
+        #expect(decision["x-order"] as? [String] == ["source_id", "filename", "folder", "tags", "reason"])
     }
 
     @Test func independentlyValidatesBatchDecisionsAndMissingResults() throws {
