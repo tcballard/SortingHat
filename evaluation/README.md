@@ -24,7 +24,11 @@ uv run sortinghat-evaluate \
   --allow-pcc
 ```
 
+The committed WWDC26 comparison, environment, aggregate results, and limitations are documented in [`docs/wwdc26-comparison.md`](../docs/wwdc26-comparison.md). The raw corpus and model outputs remain private.
+
 `uv.lock` pins the complete environment. `matrix.json` defines model, use-case, and prompt combinations; `prompts.json` versions the prompt text independently. Copy either file and pass `--matrix` or `--prompts` to compare a new experiment without overwriting the published contract. `--allow-pcc` is mandatory when any matrix row uses PCC because corpus context may be sent to Apple's Private Cloud Compute; omit the PCC row and the flag for a fully on-device run.
+
+Use `system-matrix.json` when the corpus must remain entirely on the Mac.
 
 Each run produces:
 

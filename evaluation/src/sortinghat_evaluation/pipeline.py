@@ -128,8 +128,11 @@ class AppleBackend:
             arguments.append(prompt)
             completed = subprocess.run(
                 arguments,
-                check=True, capture_output=True, text=True, timeout=MODEL_TIMEOUT_SECONDS,
+                check=False, capture_output=True, text=True, timeout=MODEL_TIMEOUT_SECONDS,
             )
+            if completed.returncode != 0:
+                diagnostic = (completed.stderr or completed.stdout).strip()
+                raise RuntimeError(f"fm exited {completed.returncode}: {diagnostic}")
         return json.loads(completed.stdout)
 
 
@@ -284,7 +287,10 @@ def classify_error(error: str | None) -> str | None:
         return "unsupported_transport"
     infrastructure_markers = (
         "CriticalMemoryPressure", "ModelManagerError:1013", "ModelManagerError error 1013",
+        "ModelManagerServices.ModelManagerError Code=1013",
         "LanguageModelError error -1", "SensitiveContentAnalysisML error 15",
+        "FoundationModels.LanguageModelError error -1",
+        "PCC inference is not available in this context",
         "system model unavailable", "TimeoutError", "TimeoutExpired",
     )
     if any(marker in error for marker in infrastructure_markers):
