@@ -303,6 +303,17 @@ struct SortingHatTests {
         #expect(FMAnalyzer.supportsBatch(URL(fileURLWithPath: "/tmp/notes.txt")))
     }
 
+    @Test func batchSchemaIncludesRequiredObjectMetadata() throws {
+        let root = try #require(JSONSerialization.jsonObject(with: FMAnalyzer.batchSchema) as? [String: Any])
+        #expect(root["title"] as? String == "BatchEnvelope")
+        #expect(root["x-order"] as? [String] == ["decisions"])
+        let properties = try #require(root["properties"] as? [String: Any])
+        let decisions = try #require(properties["decisions"] as? [String: Any])
+        let item = try #require(decisions["items"] as? [String: Any])
+        #expect(item["title"] as? String == "BatchDecision")
+        #expect(item["x-order"] as? [String] == ["source_id", "filename", "folder", "tags", "reason"])
+    }
+
     @Test func independentlyValidatesBatchDecisionsAndMissingResults() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let files = ["one.txt", "two.txt", "three.txt"].map { root.appending(path: $0) }
