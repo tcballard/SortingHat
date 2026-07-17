@@ -303,6 +303,20 @@ struct SortingHatTests {
         #expect(FMAnalyzer.supportsBatch(URL(fileURLWithPath: "/tmp/notes.txt")))
     }
 
+    @Test func batchSchemaIncludesRequiredObjectMetadata() throws {
+        let root = try #require(JSONSerialization.jsonObject(with: FMAnalyzer.batchSchema) as? [String: Any])
+        #expect(root["title"] as? String == "BatchEnvelope")
+        #expect(root["x-order"] as? [String] == ["decisions"])
+        let properties = try #require(root["properties"] as? [String: Any])
+        let decisions = try #require(properties["decisions"] as? [String: Any])
+        let item = try #require(decisions["items"] as? [String: Any])
+        #expect(item["$ref"] as? String == "#/$defs/BatchDecision")
+        let definitions = try #require(root["$defs"] as? [String: Any])
+        let decision = try #require(definitions["BatchDecision"] as? [String: Any])
+        #expect(decision["title"] as? String == "BatchDecision")
+        #expect(decision["x-order"] as? [String] == ["source_id", "filename", "folder", "tags", "reason"])
+    }
+
     @Test func independentlyValidatesBatchDecisionsAndMissingResults() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         let files = ["one.txt", "two.txt", "three.txt"].map { root.appending(path: $0) }
@@ -405,6 +419,23 @@ struct SortingHatTests {
         FileManager.default.createFile(atPath: source.path, contents: Data())
         let analyzer = StubAnalyzer(decision: Decision(filename: "tesco-receipt.jpg", folder: "Receipts", tags: [], reason: "receipt"))
         #expect(throws: HatError.self) { try Organizer(inbox: root, rules: ["Rename files"], analyzer: analyzer).plan(source) }
+    }
+
+    @Test func restoresMissingOriginalFileExtension() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let source = root.appending(path: "Invoice-0042.pdf")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: source.path, contents: Data())
+        let analyzer = StubAnalyzer(decision: Decision(
+            filename: "acme-invoice-0042",
+            folder: "Receipts/2026",
+            tags: ["receipt"],
+            reason: "invoice"
+        ))
+
+        let move = try Organizer(inbox: root, rules: ["Rename every file"], analyzer: analyzer).plan(source)
+
+        #expect(move.destination.lastPathComponent == "acme-invoice-0042.pdf")
     }
 
     @Test func leavesExplicitAbstentionInInboxForReview() throws {

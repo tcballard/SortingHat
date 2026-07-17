@@ -5,7 +5,9 @@ import SortingHatCore
 
 @MainActor @Observable
 final class HatStore {
-    var isWatching = false
+    var isWatching = false {
+        didSet { onWatchingChanged?(isWatching) }
+    }
     var isProcessing = false
     var status = "Ready"
     var recent: [Activity] = []
@@ -18,6 +20,7 @@ final class HatStore {
     let configURL: URL
     let activityURL: URL
     private var watchTask: Task<Void, Never>?
+    @ObservationIgnored var onWatchingChanged: ((Bool) -> Void)?
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -193,6 +196,44 @@ final class HatStore {
         recent.removeAll { $0.id == activity.id }
         try? ledger.save(recent)
         status = "Returned \(sourceURL.lastPathComponent) to the Inbox"
+    }
+
+    func retry(_ activity: Activity) async throws {
+        guard activity.outcome == .failed else { return }
+        guard !isProcessing else {
+            throw RulePlanError.invalid("The hat is already sorting. Try this file again when it has finished.")
+        }
+        guard let fileURL = activity.fileURL, FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw RulePlanError.invalid("The failed file is no longer available.")
+        }
+        removeActivity(activity)
+        status = "Trying \(activity.sourceName) again"
+        await processNow()
+    }
+
+    func sendToReview(_ activity: Activity) throws {
+        guard activity.outcome == .failed else { return }
+        guard let fileURL = activity.fileURL, FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw RulePlanError.invalid("The failed file is no longer available.")
+        }
+        removeActivity(activity)
+        record(Activity(
+            sourceName: activity.sourceName,
+            sourceURL: activity.sourceURL,
+            filedName: activity.filedName,
+            destination: activity.destination,
+            fileURL: fileURL,
+            tags: activity.tags,
+            detail: "Sent to manual review after sorting failed: \(activity.detail)",
+            outcome: .needsReview
+        ))
+        status = "Ready to review \(activity.sourceName)"
+    }
+
+    func removeActivity(_ activity: Activity) {
+        recent.removeAll { $0.id == activity.id }
+        try? ledger.save(recent)
+        status = activity.outcome == .failed ? "Removed the error from Activity" : status
     }
 
     func resolve(_ activity: Activity, filedName: String, destination: String, teachingRule: String?) throws {

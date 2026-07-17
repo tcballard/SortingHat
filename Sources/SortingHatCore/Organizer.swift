@@ -64,7 +64,10 @@ public struct Organizer {
         guard !proposedFolder.isEmpty else {
             throw HatError.needsReview(decision.reason)
         }
-        let filename = try Self.safeComponent(decision.filename, label: "filename")
+        var filename = try Self.safeComponent(decision.filename, label: "filename")
+        if URL(fileURLWithPath: filename).pathExtension.isEmpty, !file.pathExtension.isEmpty {
+            filename += ".\(file.pathExtension)"
+        }
         let proposedExtension = URL(fileURLWithPath: filename).pathExtension
         guard proposedExtension.caseInsensitiveCompare(file.pathExtension) == .orderedSame else {
             throw HatError.invalidDecision("the renamed file must preserve the .\(file.pathExtension) extension")
