@@ -13,6 +13,7 @@ struct DashboardView: View {
     @State private var section: DashboardSection = .inbox
     @State private var choosingFiles = false
     @State private var importError: String?
+    @State private var recoveryError: String?
 
     private var selectedActivity: Activity? {
         store.recent.first { $0.id == selection }
@@ -69,6 +70,14 @@ struct DashboardView: View {
             Button("OK", role: .cancel) { importError = nil }
         } message: {
             Text(importError ?? "Try adding the files again.")
+        }
+        .alert("The file couldn’t be recovered", isPresented: Binding(
+            get: { recoveryError != nil },
+            set: { if !$0 { recoveryError = nil } }
+        )) {
+            Button("OK", role: .cancel) { recoveryError = nil }
+        } message: {
+            Text(recoveryError ?? "Try another recovery action.")
         }
     }
 
@@ -233,12 +242,20 @@ struct DashboardView: View {
                     .width(72)
                 }
                 .accessibilityLabel("Recent filing activity")
+                .contextMenu(forSelectionType: Activity.ID.self) { selectedIDs in
+                    if let activity = store.recent.first(where: { selectedIDs.contains($0.id) }) {
+                        activityContextMenu(for: activity)
+                    }
+                }
 
                 ActivityDetailView(
                     activity: selectedActivity ?? store.recent.first!,
                     store: store,
                     differentiateWithoutColor: differentiateWithoutColor,
-                    reduceMotion: reduceMotion
+                    reduceMotion: reduceMotion,
+                    retry: retry,
+                    resolveManually: resolveManually,
+                    removeFromActivity: removeFromActivity
                 )
                     .frame(minHeight: 118, idealHeight: 142, maxHeight: 190)
             }
@@ -246,6 +263,41 @@ struct DashboardView: View {
     }
 
     private var reviewCount: Int { store.recent.filter { $0.outcome == .needsReview }.count }
+
+    @ViewBuilder
+    private func activityContextMenu(for activity: Activity) -> some View {
+        if activity.outcome == .failed {
+            Button("Try Sorting Again", systemImage: "arrow.clockwise") { retry(activity) }
+                .disabled(activity.fileURL == nil || store.isProcessing)
+            Button("Resolve Manually…", systemImage: "slider.horizontal.3") { resolveManually(activity) }
+                .disabled(activity.fileURL == nil)
+            Divider()
+        }
+        if let fileURL = activity.fileURL {
+            Button("Open File", systemImage: "arrow.up.forward.app") { store.open(fileURL) }
+        }
+        Button("Remove from Activity", systemImage: "xmark.circle") { removeFromActivity(activity) }
+    }
+
+    private func retry(_ activity: Activity) {
+        Task {
+            do { try await store.retry(activity) }
+            catch { recoveryError = error.localizedDescription }
+        }
+    }
+
+    private func resolveManually(_ activity: Activity) {
+        do {
+            try store.sendToReview(activity)
+            selection = nil
+            openWindow(id: "review")
+        } catch { recoveryError = error.localizedDescription }
+    }
+
+    private func removeFromActivity(_ activity: Activity) {
+        store.removeActivity(activity)
+        if selection == activity.id { selection = nil }
+    }
 
     private func select(_ newSection: DashboardSection) {
         if reduceMotion { section = newSection }
@@ -375,6 +427,9 @@ private struct ActivityDetailView: View {
     let store: HatStore
     let differentiateWithoutColor: Bool
     let reduceMotion: Bool
+    let retry: (Activity) -> Void
+    let resolveManually: (Activity) -> Void
+    let removeFromActivity: (Activity) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -403,6 +458,14 @@ private struct ActivityDetailView: View {
                     }
                 }
                 Spacer()
+                if activity.outcome == .failed, activity.fileURL != nil {
+                    Button("Try Again", systemImage: "arrow.clockwise") { retry(activity) }
+                        .controlSize(.small)
+                        .disabled(store.isProcessing)
+                    Button("Resolve…") { resolveManually(activity) }
+                        .controlSize(.small)
+                        .buttonStyle(.borderedProminent)
+                }
                 if let fileURL = activity.fileURL {
                     if activity.outcome == .filed {
                         Button("Undo") { try? store.undo(activity) }
@@ -416,6 +479,14 @@ private struct ActivityDetailView: View {
                         .foregroundStyle(.secondary)
                         .controlSize(.small)
                 }
+                Menu("More", systemImage: "ellipsis.circle") {
+                    Button("Remove from Activity", systemImage: "xmark.circle") {
+                        removeFromActivity(activity)
+                    }
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("More activity actions")
             }
         }
         .padding(14)
