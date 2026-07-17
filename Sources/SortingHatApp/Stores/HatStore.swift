@@ -5,7 +5,9 @@ import SortingHatCore
 
 @MainActor @Observable
 final class HatStore {
-    var isWatching = false
+    var isWatching = false {
+        didSet { onWatchingChanged?(isWatching) }
+    }
     var isProcessing = false
     var status = "Ready"
     var recent: [Activity] = []
@@ -18,6 +20,7 @@ final class HatStore {
     let configURL: URL
     let activityURL: URL
     private var watchTask: Task<Void, Never>?
+    @ObservationIgnored var onWatchingChanged: ((Bool) -> Void)?
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser

@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func configure(store: HatStore, openWindow: OpenWindowAction) {
         self.store = store
         self.openWindow = openWindow
+        store.onWatchingChanged = { [weak self] _ in self?.updateStatusItem() }
         updateStatusItem()
     }
 
@@ -101,8 +102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusItem() {
         guard let button = statusItem?.button else { return }
         let isWatching = store?.isWatching ?? true
-        button.image = wizardHatImage()
-        button.alphaValue = isWatching ? 1 : 0.58
+        button.image = wizardHatImage(active: isWatching)
+        button.alphaValue = 1
         button.toolTip = isWatching ? "Sorting Hat — monitoring Inbox" : "Sorting Hat — paused"
         button.setAccessibilityLabel(isWatching ? "Sorting Hat, monitoring Inbox" : "Sorting Hat, paused")
     }
@@ -119,7 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showStatusMenu(relativeTo button: NSStatusBarButton) {
         let menu = NSMenu()
         let status = NSMenuItem(title: store?.isProcessing == true ? "Sorting files…" : (store?.status ?? "Sorting Hat"), action: nil, keyEquivalent: "")
-        status.image = wizardHatImage()
+        status.image = wizardHatImage(active: store?.isWatching ?? true)
         menu.addItem(status)
 
         let reviewCount = store?.recent.filter { $0.outcome == .needsReview }.count ?? 0
@@ -153,12 +154,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return item
     }
 
-    private func wizardHatImage() -> NSImage? {
+    private func wizardHatImage(active: Bool) -> NSImage? {
         let renderer = ImageRenderer(content: WizardHatSymbol(size: 18))
         renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
         guard let image = renderer.nsImage else { return nil }
         image.size = NSSize(width: 18, height: 16)
-        image.isTemplate = true
+        image.isTemplate = !active
         image.accessibilityDescription = "Sorting Hat"
         return image
     }
