@@ -14,6 +14,9 @@ from typing import Any, Protocol
 
 from .bounded_tools import SUPPORTED_TOOLS, ToolContext, build_tools
 
+MODEL_ATTEMPTS = 2
+MODEL_TIMEOUT_SECONDS = 20
+
 
 @dataclass(frozen=True)
 class Variant:
@@ -39,6 +42,7 @@ class CaseResult:
     latency_ms: float
     output: dict[str, Any] | None
     error: str | None
+    error_kind: str | None
     folder_correct: bool
     filename_correct: bool
     tags_correct: bool
@@ -83,15 +87,27 @@ class AppleBackend:
         if not available:
             raise RuntimeError(f"system model unavailable: {reason}")
         tools = build_tools(variant.tools, tool_context)
-        response = await fm.LanguageModelSession(model=model, instructions=instructions, tools=tools).respond(
-            prompt=prompt, generating=SortingDecision)
+        for attempt in range(MODEL_ATTEMPTS):
+            try:
+                response = await asyncio.wait_for(
+                    fm.LanguageModelSession(model=model, instructions=instructions, tools=tools).respond(
+                        prompt=prompt, generating=SortingDecision),
+                    timeout=MODEL_TIMEOUT_SECONDS,
+                )
+                break
+            except Exception as error:
+                if attempt == MODEL_ATTEMPTS - 1 or classify_error(
+                        f"{type(error).__name__}: {error}") != "infrastructure":
+                    raise
+                await asyncio.sleep(0.6 * (attempt + 1))
         return {"filename": response.filename, "folder": response.folder,
                 "tags": list(response.tags), "reason": response.reason}
 
     @staticmethod
     def _respond_cli(variant: Variant, instructions: str, prompt: str, source: Path) -> dict[str, Any]:
         schema = {
-            "type": "object", "additionalProperties": False,
+            "title": "SortingDecision", "type": "object", "additionalProperties": False,
+            "x-order": ["filename", "folder", "tags", "reason"],
             "required": ["filename", "folder", "tags", "reason"],
             "properties": {
                 "filename": {"type": "string"}, "folder": {"type": "string"},
@@ -103,6 +119,8 @@ class AppleBackend:
             json.dump(schema, handle); handle.flush()
             arguments = ["/usr/bin/fm", "respond", "--model", variant.model, "--instructions", instructions,
                          "--schema", handle.name, "--no-stream", "--greedy"]
+            if variant.model == "system":
+                arguments.extend(["--guardrails", "permissive-content-transformations"])
             if variant.model == "system" and variant.use_case != "general":
                 arguments.extend(["--use-case", variant.use_case])
             if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".heic", ".gif", ".tiff", ".webp"}:
@@ -110,7 +128,7 @@ class AppleBackend:
             arguments.append(prompt)
             completed = subprocess.run(
                 arguments,
-                check=True, capture_output=True, text=True,
+                check=True, capture_output=True, text=True, timeout=MODEL_TIMEOUT_SECONDS,
             )
         return json.loads(completed.stdout)
 
@@ -202,7 +220,7 @@ async def run_pipeline(*, corpus_path: Path, matrix_path: Path, prompts_path: Pa
         "results": [asdict(result) | {"correct": result.correct} for result in results],
         "summaries": summarize(results),
     }
-    artifact["tool_evidence"] = assess_tool_evidence(artifact["summaries"], matrix.get("tool_policy"))
+    artifact["tool_evidence"] = assess_tool_results(results, matrix.get("tool_policy"))
     output.mkdir(parents=True, exist_ok=True)
     (output / "comparison.json").write_text(json.dumps(artifact, indent=2, sort_keys=True), encoding="utf-8")
     write_csv(output / "comparison.csv", artifact["summaries"])
@@ -255,8 +273,23 @@ def score(case: dict[str, Any], variant: Variant, os_version: str, latency_ms: f
         (".jpg", ".jpeg", ".png", ".heic", ".gif", ".tiff", ".webp")) else "python-sdk"
     return CaseResult(variant.id, case["id"], case["kind"], variant.model, variant.use_case,
                       variant.prompt, variant.tools, dict(tool_calls or {}), transport, os_version,
-                      latency_ms, decision or None, error,
+                      latency_ms, decision or None, error, classify_error(error),
                       folder_correct, filename_correct, tags_correct, missing, excess)
+
+
+def classify_error(error: str | None) -> str | None:
+    if error is None:
+        return None
+    if "tool calling is unsupported" in error:
+        return "unsupported_transport"
+    infrastructure_markers = (
+        "CriticalMemoryPressure", "ModelManagerError:1013", "ModelManagerError error 1013",
+        "LanguageModelError error -1", "SensitiveContentAnalysisML error 15",
+        "system model unavailable", "TimeoutError", "TimeoutExpired",
+    )
+    if any(marker in error for marker in infrastructure_markers):
+        return "infrastructure"
+    return "generation"
 
 
 def summarize(results: list[CaseResult]) -> list[dict[str, Any]]:
@@ -302,6 +335,60 @@ def assess_tool_evidence(rows: list[dict[str, Any]], policy: dict[str, Any] | No
             "candidates": candidates}
 
 
+def assess_tool_results(results: list[CaseResult], policy: dict[str, Any] | None) -> dict[str, Any]:
+    if not policy:
+        return {"status": "not_requested", "accepted": [], "candidates": []}
+    baseline_id = policy.get("baseline_variant")
+    baseline = [result for result in results
+                if result.variant == baseline_id and result.transport == "python-sdk"]
+    if not baseline:
+        raise ValueError("tool policy baseline has no Python SDK cases")
+    if any(result.error_kind == "infrastructure" for result in baseline):
+        return {
+            "status": "inconclusive",
+            "reason": "Apple model infrastructure failed during baseline tool-capable cases; rerun when the system is healthy.",
+            "infrastructure_failures": sum(result.error_kind == "infrastructure" for result in baseline),
+            "accepted": [],
+            "candidates": [],
+        }
+    candidates = []
+    variant_ids = dict.fromkeys(result.variant for result in results if result.enabled_tools)
+    for variant_id in variant_ids:
+        candidate = [result for result in results
+                     if result.variant == variant_id and result.transport == "python-sdk"]
+        infrastructure_count = sum(result.error_kind == "infrastructure" for result in candidate)
+        if infrastructure_count:
+            candidates.append({
+                "variant": variant_id,
+                "tools": list(candidate[0].enabled_tools),
+                "status": "inconclusive",
+                "reason": "Apple model infrastructure failed during this candidate.",
+                "infrastructure_failures": infrastructure_count,
+                "accepted": False,
+            })
+            continue
+        candidate_by_case = {result.case_id: result for result in candidate}
+        paired_baseline = [result for result in baseline if result.case_id in candidate_by_case]
+        paired_candidate = [candidate_by_case[result.case_id] for result in paired_baseline]
+        if len(paired_baseline) != len(baseline):
+            candidates.append({
+                "variant": variant_id, "tools": list(candidate[0].enabled_tools),
+                "status": "inconclusive", "reason": "Candidate does not cover every tool-capable baseline case.",
+                "accepted": False,
+            })
+            continue
+        assessed = assess_tool_evidence(summarize(paired_baseline + paired_candidate), policy)["candidates"][0]
+        assessed["status"] = "evaluated"
+        assessed["comparable_cases"] = len(paired_baseline)
+        candidates.append(assessed)
+    return {
+        "status": "evaluated",
+        "accepted": [item["variant"] for item in candidates if item["accepted"]],
+        "candidates": candidates,
+        "excluded_unsupported_cases": sum(result.error_kind == "unsupported_transport" for result in results),
+    }
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fieldnames = list(dict.fromkeys(key for row in rows for key in row))
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -317,9 +404,14 @@ def write_summary(path: Path, artifact: dict[str, Any]) -> None:
                      f"{row['accuracy']:.1%} | {row['failure_rate']:.1%} | {row['missing_information']:.2f} | "
                      f"{row['excess_information']:.2f} | {row['average_latency_ms']:.1f} ms |")
     evidence = artifact.get("tool_evidence", {})
-    if evidence.get("status") == "evaluated":
+    if evidence.get("status") == "inconclusive":
+        lines.extend(["", "## Tool evidence", "", f"**INCONCLUSIVE** — {evidence['reason']}"])
+    elif evidence.get("status") == "evaluated":
         lines.extend(["", "## Tool evidence", ""])
         for item in evidence["candidates"]:
+            if item.get("status") == "inconclusive":
+                lines.append(f"- **INCONCLUSIVE** `{item['variant']}`: {item['reason']}")
+                continue
             verdict = "ACCEPT" if item["accepted"] else "REJECT"
             lines.append(f"- **{verdict}** `{item['variant']}`: accuracy {item['accuracy_uplift']:+.1%}, "
                          f"failures {item['failure_rate_delta']:+.1%}, latency {item['latency_delta_ms']:+.1f} ms, "

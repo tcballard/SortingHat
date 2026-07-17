@@ -53,6 +53,8 @@ uv run --no-sync pytest
 
 Candidate filing-context tools are evaluation-only and cannot mutate or browse the filesystem. Their data boundaries, argument/result caps, call budget, provider behavior, and acceptance gate are documented in [`TOOL_THREAT_MODEL.md`](TOOL_THREAT_MODEL.md).
 
+The completed Issue #9 experiment and its ship/no-ship decision are recorded in [`TOOL_RESULTS.md`](TOOL_RESULTS.md).
+
 Add optional top-level `destinations` and `taxonomy` values to the private corpus manifest, then run the controlled matrix:
 
 ```json
@@ -74,3 +76,5 @@ uv run sortinghat-evaluate \
 ```
 
 The baseline and each candidate see the same initial 2,000-character excerpt. Only `content_segment` can request another range from the already-extracted 12,000-character text. `comparison.json` records enabled tools and actual call counts; `summary.md` marks each candidate `ACCEPT` or `REJECT`. A candidate must actually be called, improve accuracy by at least two percentage points, add no failures, and add no more than 500 ms average latency. No tool is enabled in the shipping app by this experiment.
+
+Each Apple model attempt is capped at 20 seconds and retried once for transient model-service failures. Image/PCC rows that require the `fm` CLI are excluded from the paired tool evidence because that transport does not support Python SDK tools. If comparable Python SDK cases encounter model-service, memory-pressure, sanitizer, availability, or timeout failures, the tool verdict is `INCONCLUSIVE` rather than a false accept or reject.
