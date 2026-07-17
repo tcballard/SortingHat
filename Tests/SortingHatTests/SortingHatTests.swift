@@ -421,6 +421,23 @@ struct SortingHatTests {
         #expect(throws: HatError.self) { try Organizer(inbox: root, rules: ["Rename files"], analyzer: analyzer).plan(source) }
     }
 
+    @Test func restoresMissingOriginalFileExtension() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let source = root.appending(path: "Invoice-0042.pdf")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: source.path, contents: Data())
+        let analyzer = StubAnalyzer(decision: Decision(
+            filename: "acme-invoice-0042",
+            folder: "Receipts/2026",
+            tags: ["receipt"],
+            reason: "invoice"
+        ))
+
+        let move = try Organizer(inbox: root, rules: ["Rename every file"], analyzer: analyzer).plan(source)
+
+        #expect(move.destination.lastPathComponent == "acme-invoice-0042.pdf")
+    }
+
     @Test func leavesExplicitAbstentionInInboxForReview() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
