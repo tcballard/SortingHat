@@ -1,6 +1,8 @@
 # Sorting Hat Python evaluation
 
-This is an evaluation-only Python project. Nothing under this directory is linked into or required by the shipping Swift package.
+This is an evaluation-only Python project. Nothing under this directory is linked into or required by the shipping Swift package. It is useful for prompt, use-case, PCC, and bounded-tool research; the root `sorting-hat evaluate --live` command is the product-quality authority because it exercises the shipping Swift extraction, routing, and validation path. In its schema-v2 artifact, `raw_decision` means the model output before deterministic policy and `decision` means the resolved, validated shipping result used for scoring.
+
+The completed shipping-path routing gate and the rejected prompt-only candidates are recorded in [`ROUTING_RESULTS.md`](ROUTING_RESULTS.md).
 
 ## Requirements
 

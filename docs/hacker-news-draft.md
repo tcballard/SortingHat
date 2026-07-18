@@ -2,7 +2,7 @@
 
 ## Suggested title
 
-Show HN: Sorting Hat – I turned Apple’s WWDC26 file-sorting demo into a local-first Mac app
+Show HN: Sorting Hat – I built a better product than Apple’s WWDC26 file-sorting demo
 
 ## Post
 
@@ -12,9 +12,11 @@ I wanted the product version of that idea, so I built Sorting Hat: a native macO
 
 The model only proposes actions. Deterministic Swift code validates paths, extensions, batch identities, and collisions before touching a file. Apple’s on-device model is the default; PCC is explicit opt-in, and Ollama can keep the fallback local.
 
-I also copied the best part of the second half of Apple’s talk: measure it. The repo includes a locked Python prompt-evaluation harness and a bounded tool-calling experiment. The honest first six-case run is not a victory lap: it produced 0/6 exact decisions because folder routing missed the strict expected destinations. All four tool candidates were rejected by the predeclared quality/latency gate.
+I also copied the best part of the second half of Apple’s talk: measure it. The repo includes a shipping-path Swift evaluator, a locked Python research harness, and predeclared quality and latency gates. The first prompt-only benchmark failed honestly, and three attempted prompt rewrites made accuracy, safety, or latency worse.
 
-So I’m not claiming better model accuracy. I do think it is already a more complete, safer, and more usable product than the demo—and the failed benchmark is now the next piece of work rather than something hidden from the launch story.
+The change that passed was deliberately less magical: keep the fast prompt, compile the destinations people configured, and let deterministic Swift resolve case, date templates, source extensions, and uncertain catch-all decisions before any file action. On a private 12-case corpus, the corrected shipping-path baseline scored 24/36 exact decisions across three runs. The final implementation scored 108/108 across nine runs, held all 18 ambiguous repetitions for review, produced zero invalid final decisions, and stayed inside the latency gate even with a 65-second model outlier retained.
+
+That is still a small private regression corpus, not proof of universal model superiority. The “better” claim is about the product: a persistent, local-first, recoverable Mac experience with a measured safety boundary, compared with an intentionally compact teaching demo. The repo publishes the policy, aggregate evidence, negative results, and limitations; it does not publish the private files or raw outputs.
 
 Repository: https://github.com/tcballard/SortingHat
 
