@@ -187,7 +187,7 @@ struct SortingHatTests {
                 folders: ["Wrong"], filenameContains: ["receipt"], tags: ["receipt"], abstain: false)),
         ], thresholds: nil)
         let configuration = EvaluationConfiguration(model: "system", useCase: "general", guardrails: "default",
-            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS")
+            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS", routingPolicyVersion: RoutingDecisionResolver.version)
         let baselineMetrics = EvaluationMetrics(total: 1, correct: 1, folderCorrect: 1, filenameCorrect: 1, tagsCorrect: 1,
             generationFailures: 0, schemaFailures: 0, unsafeOrInvalidDecisions: 0, abstentions: 0, accuracy: 1,
             generationFailureRate: 0, unsafeDecisionRate: 0, averageLatencyMilliseconds: 1)
@@ -227,6 +227,69 @@ struct SortingHatTests {
         #expect(artifact.regressions == ["baseline artifact schema 1 is not comparable with schema 2"])
     }
 
+    @Test func decodesSchemaOneArtifactWithoutRoutingPolicyOrRawDecision() throws {
+        let data = Data(#"""
+        {
+          "schema_version": 1,
+          "corpus_name": "legacy-synthetic",
+          "created_at": "2026-07-18T12:00:00Z",
+          "configuration": {
+            "model": "system",
+            "use_case": "general",
+            "guardrails": "default",
+            "pcc_allowed": false,
+            "prompt_version": "sorting-decision-v2",
+            "operating_system": "macOS 27"
+          },
+          "metrics": {
+            "total": 1,
+            "correct": 1,
+            "folder_correct": 1,
+            "filename_correct": 1,
+            "tags_correct": 1,
+            "generation_failures": 0,
+            "schema_failures": 0,
+            "unsafe_or_invalid_decisions": 0,
+            "abstentions": 0,
+            "accuracy": 1,
+            "generation_failure_rate": 0,
+            "unsafe_decision_rate": 0,
+            "average_latency_ms": 12
+          },
+          "results": [
+            {
+              "id": "receipt",
+              "kind": "receipt",
+              "latency_ms": 12,
+              "decision": {
+                "filename": "tesco-receipt.txt",
+                "folder": "Receipts/2026",
+                "tags": ["receipt"],
+                "reason": "receipt"
+              },
+              "error": null,
+              "folder_correct": true,
+              "filename_correct": true,
+              "tags_correct": true,
+              "abstained": false,
+              "unsafe_or_invalid": false
+            }
+          ],
+          "threshold_failures": [],
+          "regressions": []
+        }
+        """#.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let artifact = try decoder.decode(EvaluationArtifact.self, from: data)
+
+        #expect(artifact.schemaVersion == 1)
+        #expect(artifact.configuration.routingPolicyVersion == nil)
+        #expect(artifact.results[0].rawDecision == nil)
+        #expect(artifact.results[0].decision?.folder == "Receipts/2026")
+    }
+
     @Test func liveEvaluationScoresResolvedShippingDecisionAndRetainsRawDiagnostics() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -246,7 +309,7 @@ struct SortingHatTests {
                 folders: [], filenameContains: [], tags: [], abstain: true)),
         ], thresholds: nil)
         let configuration = EvaluationConfiguration(model: "system", useCase: "general", guardrails: "default",
-            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS", routingPolicyVersion: RoutingDecisionResolver.version)
+            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS")
 
         let artifact = LiveEvaluator.run(
             manifest: manifest,
@@ -256,6 +319,7 @@ struct SortingHatTests {
         )
 
         #expect(artifact.schemaVersion == 2)
+        #expect(artifact.configuration.routingPolicyVersion == RoutingDecisionResolver.version)
         #expect(artifact.metrics.correct == 2)
         #expect(artifact.results[0].rawDecision?.folder == "Files/2026-07")
         #expect(artifact.results[0].decision?.folder == "Screenshots/2026-07")

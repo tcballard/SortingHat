@@ -173,6 +173,16 @@ public enum LiveEvaluator {
         baseline: EvaluationArtifact? = nil
     ) -> EvaluationArtifact {
         let root = corpusRoot.standardizedFileURL
+        let referenceDate = Date()
+        let recordedConfiguration = EvaluationConfiguration(
+            model: configuration.model,
+            useCase: configuration.useCase,
+            guardrails: configuration.guardrails,
+            pccAllowed: configuration.pccAllowed,
+            promptVersion: configuration.promptVersion,
+            operatingSystem: configuration.operatingSystem,
+            routingPolicyVersion: RoutingDecisionResolver.version
+        )
         let results = manifest.cases.map { item -> EvaluationResult in
             let file = root.appending(path: item.path).standardizedFileURL
             let started = ContinuousClock.now
@@ -180,10 +190,20 @@ public enum LiveEvaluator {
             do {
                 let raw = try analyzer.analyze(file: file, rules: manifest.rules)
                 rawDecision = raw
-                let decision = try RoutingDecisionResolver.resolve(file: file, decision: raw, rules: manifest.rules)
+                let decision = try RoutingDecisionResolver.resolve(
+                    file: file,
+                    decision: raw,
+                    rules: manifest.rules,
+                    referenceDate: referenceDate
+                )
                 let elapsed = milliseconds(since: started)
                 let abstained = decision.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let validationError = validate(file: file, decision: decision, rules: manifest.rules)
+                let validationError = validate(
+                    file: file,
+                    decision: decision,
+                    rules: manifest.rules,
+                    referenceDate: referenceDate
+                )
                 let valid = validationError == nil
                 let folderCorrect = valid && (item.expected.abstain ? abstained : item.expected.folders.contains(decision.folder))
                 let loweredName = decision.filename.lowercased()
@@ -201,10 +221,10 @@ public enum LiveEvaluator {
             }
         }
         let metrics = metrics(for: results)
-        return EvaluationArtifact(schemaVersion: 2, corpusName: manifest.name, createdAt: Date(), configuration: configuration,
+        return EvaluationArtifact(schemaVersion: 2, corpusName: manifest.name, createdAt: referenceDate, configuration: recordedConfiguration,
                                   metrics: metrics, results: results,
                                   thresholdFailures: thresholdFailures(metrics, manifest.thresholds),
-                                  regressions: regressions(metrics, baseline: baseline, corpusName: manifest.name, configuration: configuration))
+                                  regressions: regressions(metrics, baseline: baseline, corpusName: manifest.name, configuration: recordedConfiguration))
     }
 
     public static func write(_ artifact: EvaluationArtifact, to outputDirectory: URL) throws {
@@ -246,13 +266,21 @@ public enum LiveEvaluator {
         """
     }
 
-    private static func validate(file: URL, decision: Decision, rules: [String]) -> Error? {
+    private static func validate(file: URL, decision: Decision, rules: [String], referenceDate: Date) -> Error? {
         if decision.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
         struct FixedAnalyzer: FileAnalyzing {
             let decision: Decision
             func analyze(file: URL, rules: [String]) throws -> Decision { decision }
         }
-        do { _ = try Organizer(inbox: file.deletingLastPathComponent(), rules: rules, analyzer: FixedAnalyzer(decision: decision)).plan(file); return nil }
+        do {
+            _ = try Organizer(
+                inbox: file.deletingLastPathComponent(),
+                rules: rules,
+                analyzer: FixedAnalyzer(decision: decision),
+                referenceDate: referenceDate
+            ).plan(file)
+            return nil
+        }
         catch { return error }
     }
 
@@ -298,7 +326,8 @@ public enum LiveEvaluator {
               baselineConfiguration.useCase == configuration.useCase,
               baselineConfiguration.guardrails == configuration.guardrails,
               baselineConfiguration.pccAllowed == configuration.pccAllowed,
-              baselineConfiguration.operatingSystem == configuration.operatingSystem else {
+              baselineConfiguration.operatingSystem == configuration.operatingSystem,
+              baselineConfiguration.routingPolicyVersion == configuration.routingPolicyVersion else {
             return ["baseline model environment does not match this evaluation"]
         }
 
