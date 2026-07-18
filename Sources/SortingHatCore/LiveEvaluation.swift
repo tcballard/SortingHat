@@ -258,7 +258,7 @@ public enum LiveEvaluator {
         | Schema failures | \(artifact.metrics.schemaFailures) |
         | Unsafe/invalid decisions | \(artifact.metrics.unsafeOrInvalidDecisions) |
         | Abstentions | \(artifact.metrics.abstentions) |
-        | Average latency | \(String(format: "%.1f ms", artifact.metrics.averageLatencyMilliseconds)) |
+        | Average pre-validation latency | \(String(format: "%.1f ms", artifact.metrics.averageLatencyMilliseconds)) |
 
         ## Thresholds and regressions
 
@@ -327,8 +327,9 @@ public enum LiveEvaluator {
               baselineConfiguration.guardrails == configuration.guardrails,
               baselineConfiguration.pccAllowed == configuration.pccAllowed,
               baselineConfiguration.operatingSystem == configuration.operatingSystem,
+              baselineConfiguration.promptVersion == configuration.promptVersion,
               baselineConfiguration.routingPolicyVersion == configuration.routingPolicyVersion else {
-            return ["baseline model environment does not match this evaluation"]
+            return ["baseline evaluation configuration does not match this evaluation"]
         }
 
         var values: [String] = []

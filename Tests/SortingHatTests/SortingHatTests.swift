@@ -290,6 +290,68 @@ struct SortingHatTests {
         #expect(artifact.results[0].decision?.folder == "Receipts/2026")
     }
 
+    @Test func refusesAutomaticRegressionComparisonAcrossPromptVersions() {
+        let baselineConfiguration = EvaluationConfiguration(
+            model: "system",
+            useCase: "general",
+            guardrails: "default",
+            pccAllowed: false,
+            promptVersion: "baseline-prompt",
+            operatingSystem: "testOS",
+            routingPolicyVersion: RoutingDecisionResolver.version
+        )
+        let candidateConfiguration = EvaluationConfiguration(
+            model: "system",
+            useCase: "general",
+            guardrails: "default",
+            pccAllowed: false,
+            promptVersion: "candidate-prompt",
+            operatingSystem: "testOS"
+        )
+        let metrics = EvaluationMetrics(
+            total: 0,
+            correct: 0,
+            folderCorrect: 0,
+            filenameCorrect: 0,
+            tagsCorrect: 0,
+            generationFailures: 0,
+            schemaFailures: 0,
+            unsafeOrInvalidDecisions: 0,
+            abstentions: 0,
+            accuracy: 0,
+            generationFailureRate: 0,
+            unsafeDecisionRate: 0,
+            averageLatencyMilliseconds: 0
+        )
+        let baseline = EvaluationArtifact(
+            schemaVersion: 2,
+            corpusName: "synthetic",
+            createdAt: Date(),
+            configuration: baselineConfiguration,
+            metrics: metrics,
+            results: [],
+            thresholdFailures: [],
+            regressions: []
+        )
+        let manifest = EvaluationManifest(
+            version: 1,
+            name: "synthetic",
+            rules: [],
+            cases: [],
+            thresholds: nil
+        )
+
+        let artifact = LiveEvaluator.run(
+            manifest: manifest,
+            corpusRoot: FileManager.default.temporaryDirectory,
+            analyzer: EvaluationAnalyzer(),
+            configuration: candidateConfiguration,
+            baseline: baseline
+        )
+
+        #expect(artifact.regressions == ["baseline evaluation configuration does not match this evaluation"])
+    }
+
     @Test func liveEvaluationScoresResolvedShippingDecisionAndRetainsRawDiagnostics() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
