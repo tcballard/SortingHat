@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from sortinghat_evaluation.bounded_tools import MAX_SEGMENT_CHARACTERS, ToolContext, bounded_json
+from sortinghat_evaluation.cli import default_resource
 from sortinghat_evaluation.pipeline import (Variant, assess_tool_evidence, compare_artifacts,
                                             assess_tool_results, classify_error, run_pipeline, score,
                                             summarize, validate_inputs)
@@ -139,6 +140,15 @@ def test_classifies_environment_and_unsupported_failures():
     assert classify_error("ValueError: tool calling is unsupported by the fm CLI transport") == "unsupported_transport"
     assert classify_error("ValueError: malformed output") == "generation"
     assert classify_error("TimeoutError: model attempt exceeded 20 seconds") == "infrastructure"
+    assert classify_error("ModelManagerServices.ModelManagerError Code=1013") == "infrastructure"
+    assert classify_error("FoundationModels.LanguageModelError error -1") == "infrastructure"
+    assert classify_error("PCC inference is not available in this context") == "infrastructure"
+
+
+def test_cli_defaults_resolve_from_evaluation_directory(tmp_path: Path, monkeypatch):
+    (tmp_path / "matrix.json").write_text("{}", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert default_resource("matrix.json") == tmp_path / "matrix.json"
 
 
 def test_tool_evidence_is_inconclusive_when_model_infrastructure_fails():

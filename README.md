@@ -1,13 +1,15 @@
 # Sorting Hat
 
-A drop folder with opinions. Sorting Hat asks Apple's on-device Foundation Model what a file is, then renames, Finder-tags, and files it using rules you write in plain English.
+**A drop folder with opinions.** Sorting Hat is a native macOS filing assistant for people who want a clean Inbox without writing automation: it uses plain-language rules and Apple’s on-device Foundation Model to inspect, rename, Finder-tag, and route files, while deterministic Swift code validates every filesystem action.
+
+```sh
+./script/build_and_run.sh
+```
+
+[See exactly how the product extends Apple’s WWDC26 file-sorting demo, including the reproducible negative benchmark results.](docs/wwdc26-comparison.md)
 
 > [!WARNING]
 > The current `v0.1.0` build is an experimental pre-release. Its app bundle is ad-hoc signed, not signed with an Apple Developer ID, and it is not notarized. Gatekeeper may block the first launch; managed Macs may prohibit it entirely. Homebrew installation confirms the archive and cask are valid, but does not bypass these macOS security checks.
-
-- On-device by default: Apple's model on macOS 27, with guided structured output and local Ollama fallback on earlier versions.
-- Safe to tinker with: inspect every proposed action with `--dry-run`.
-- Yours to teach: the config is a few sentences, not a programming language.
 
 ## Requirements
 
