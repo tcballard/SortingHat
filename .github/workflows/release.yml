@@ -12,28 +12,145 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - name: Build app
-        run: BUILD_CONFIGURATION=release ./script/build_and_run.sh package
-      # This provides bundle integrity only. It does not establish a trusted
-      # developer identity and is not a substitute for notarization.
-      - name: Ad-hoc sign experimental app
-        run: codesign --force --deep --sign - "dist/Sorting Hat.app"
-      - name: Verify ad-hoc signature
+      - name: Install pinned XcodeGen
         run: |
-          codesign --verify --deep --strict --verbose=2 "dist/Sorting Hat.app"
-          authority="$(codesign -dvv "dist/Sorting Hat.app" 2>&1 | sed -n 's/^Signature=//p')"
-          test "$authority" = "adhoc"
-      - name: Archive app
+          archive="$RUNNER_TEMP/xcodegen-2.44.1.zip"
+          curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip" -o "$archive"
+          echo "a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73  $archive" | shasum -a 256 -c -
+          ditto -x -k "$archive" "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Verify generated Xcode project and Info plists are current
+        run: |
+          ./script/generate_xcode_project.sh
+          git diff --exit-code -- \
+            SortingHat.xcodeproj \
+            Configuration/SortingHatApp-Info.plist \
+            Configuration/SendToSortingHatAction-Info.plist
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.BUILD_KEYCHAIN_PASSWORD }}
+        run: |
+          test -n "$CERTIFICATE_BASE64"
+          test -n "$CERTIFICATE_PASSWORD"
+          test -n "$KEYCHAIN_PASSWORD"
+          certificate_path="$RUNNER_TEMP/sorting-hat-developer-id.p12"
+          keychain_path="$RUNNER_TEMP/sorting-hat-signing.keychain-db"
+          echo -n "$CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$certificate_path" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+      - name: Build and sign app from the extension outward
+        env:
+          BUILD_CONFIGURATION: Release
+          SORTING_HAT_SIGN_IDENTITY: "Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
+        run: ./script/build_and_run.sh package
+      - name: Verify nested signatures and entitlements
+        run: |
+          app="dist/Sorting Hat.app"
+          extension="dist/Sorting Hat.app/Contents/PlugIns/Send to Sorting Hat.appex"
+          app_info="$app/Contents/Info.plist"
+          extension_info="$extension/Contents/Info.plist"
+          test -d "$extension"
+          codesign --verify --strict --deep --verbose=2 "$extension"
+          codesign --verify --strict --deep --verbose=2 "$app"
+          codesign -dvvv "$extension" 2>&1 | grep -Fx "Authority=Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
+          codesign -dvvv "$extension" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
+          codesign -dvvv "$app" 2>&1 | grep -Fx "Authority=Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
+          codesign -dvvv "$app" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_info" | grep -Fx com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$extension_info" | grep -Fx com.tcballard.sortinghat.finder-action
+          codesign -d --entitlements :- "$extension" > "$RUNNER_TEMP/extension-entitlements.plist" 2>/dev/null
+          codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/app-entitlements.plist" 2>/dev/null
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$RUNNER_TEMP/extension-entitlements.plist" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$RUNNER_TEMP/app-entitlements.plist" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.app-sandbox" "$RUNNER_TEMP/extension-entitlements.plist" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.files.user-selected.read-only" "$RUNNER_TEMP/extension-entitlements.plist" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$extension_info" | grep -Fx com.apple.services
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$extension_info" | grep -Fx SendToSortingHatAction.ActionRequestHandler
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceFinderPreviewLabel" "$extension_info" | grep -Fx "Send to Sorting Hat"
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeViewer
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceAllowsFinderPreviewItem" "$extension_info" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsAttachmentsWithMinCount" "$extension_info" | grep -Fx 1
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsFileWithMaxCount" "$extension_info" | grep -Fx 256
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationUsesStrictMatching" "$extension_info" | grep -Fx true
+      - name: Notarize and staple app
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          test -n "$NOTARY_APPLE_ID"
+          test -n "$NOTARY_PASSWORD"
+          submission="$RUNNER_TEMP/Sorting-Hat-notarization.zip"
+          ditto -c -k --sequesterRsrc --keepParent "dist/Sorting Hat.app" "$submission"
+          xcrun notarytool submit "$submission" \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id R8HXTBY3NM \
+            --wait
+          xcrun stapler staple "dist/Sorting Hat.app"
+          xcrun stapler validate "dist/Sorting Hat.app"
+          spctl --assess --type execute --verbose=2 "dist/Sorting Hat.app"
+      - name: Archive verified app
         run: ditto -c -k --sequesterRsrc --keepParent "dist/Sorting Hat.app" "Sorting-Hat-${GITHUB_REF_NAME}.zip"
-      - name: Publish experimental pre-release
+      - name: Verify final release archive
+        run: |
+          archive="Sorting-Hat-${GITHUB_REF_NAME}.zip"
+          verification_root="$RUNNER_TEMP/final-release-verification"
+          app="$verification_root/Sorting Hat.app"
+          extension="$app/Contents/PlugIns/Send to Sorting Hat.appex"
+          app_info="$app/Contents/Info.plist"
+          extension_info="$extension/Contents/Info.plist"
+          app_entitlements="$RUNNER_TEMP/final-app-entitlements.plist"
+          extension_entitlements="$RUNNER_TEMP/final-extension-entitlements.plist"
+
+          test -f "$archive"
+          rm -rf "$verification_root"
+          mkdir -p "$verification_root"
+          ditto -x -k "$archive" "$verification_root"
+          test -d "$app"
+          test -d "$extension"
+
+          codesign --verify --strict --deep --verbose=2 "$extension"
+          codesign --verify --strict --deep --verbose=2 "$app"
+          codesign -dvvv "$extension" 2>&1 | grep -Fx "Authority=Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
+          codesign -dvvv "$extension" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
+          codesign -dvvv "$app" 2>&1 | grep -Fx "Authority=Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
+          codesign -dvvv "$app" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_info" | grep -Fx com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$extension_info" | grep -Fx com.tcballard.sortinghat.finder-action
+
+          codesign -d --entitlements :- "$app" > "$app_entitlements" 2>/dev/null
+          codesign -d --entitlements :- "$extension" > "$extension_entitlements" 2>/dev/null
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$app_entitlements" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$extension_entitlements" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.app-sandbox" "$extension_entitlements" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.files.user-selected.read-only" "$extension_entitlements" | grep -Fx true
+
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$extension_info" | grep -Fx com.apple.services
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$extension_info" | grep -Fx SendToSortingHatAction.ActionRequestHandler
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceFinderPreviewLabel" "$extension_info" | grep -Fx "Send to Sorting Hat"
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeViewer
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceAllowsFinderPreviewItem" "$extension_info" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsAttachmentsWithMinCount" "$extension_info" | grep -Fx 1
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsFileWithMaxCount" "$extension_info" | grep -Fx 256
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationUsesStrictMatching" "$extension_info" | grep -Fx true
+      - name: Publish signed pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" "Sorting-Hat-${GITHUB_REF_NAME}.zip" \
             --prerelease \
             --generate-notes \
-            --title "Sorting Hat $GITHUB_REF_NAME (experimental)" \
-            --notes "Experimental pre-release: this app is ad-hoc signed and not notarized. Gatekeeper may block its first launch, and managed Macs may prohibit it. Homebrew installation does not bypass these checks."
+            --title "Sorting Hat $GITHUB_REF_NAME" \
+            --notes "Signed and notarized macOS pre-release. Enable the bundled Send to Sorting Hat action in System Settings → General → Login Items & Extensions → Finder."
       - name: Calculate release checksum
         id: release
         run: |

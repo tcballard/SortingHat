@@ -1,0 +1,90 @@
+name: SortingHat
+options:
+  bundleIdPrefix: com.tcballard
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    ARCHS: arm64
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: R8HXTBY3NM
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "6.0"
+packages:
+  SortingHatPackage:
+    path: .
+targets:
+  SortingHatApp:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/SortingHatApp
+    dependencies:
+      - package: SortingHatPackage
+        product: SortingHatCore
+      - target: SendToSortingHatAction
+        embed: true
+    info:
+      path: Configuration/SortingHatApp-Info.plist
+      properties:
+        CFBundleDisplayName: Sorting Hat
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMinimumSystemVersion: "14.0"
+        LSUIElement: true
+        NSHumanReadableCopyright: Copyright © 2026 Tom Ballard. All rights reserved.
+        NSPrincipalClass: NSApplication
+        SortingHatAppGroupIdentifier: R8HXTBY3NM.com.tcballard.sortinghat
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: Configuration/SortingHatApp.entitlements
+        ENABLE_HARDENED_RUNTIME: true
+        PRODUCT_BUNDLE_IDENTIFIER: com.tcballard.sortinghat
+        PRODUCT_NAME: Sorting Hat
+  SendToSortingHatAction:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Sources/SendToSortingHatAction
+    dependencies:
+      - package: SortingHatPackage
+        product: SortingHatCore
+      - package: SortingHatPackage
+        product: SortingHatFinderAdapter
+    info:
+      path: Configuration/SendToSortingHatAction-Info.plist
+      properties:
+        CFBundleDisplayName: Send to Sorting Hat
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationDictionaryVersion: 1
+              NSExtensionActivationSupportsAttachmentsWithMinCount: 1
+              NSExtensionActivationSupportsFileWithMaxCount: 256
+              NSExtensionActivationUsesStrictMatching: true
+            NSExtensionServiceAllowsFinderPreviewItem: true
+            NSExtensionServiceFinderPreviewIconName: NSActionTemplate
+            NSExtensionServiceFinderPreviewLabel: Send to Sorting Hat
+            NSExtensionServiceRoleType: NSExtensionServiceRoleTypeViewer
+          NSExtensionPointIdentifier: com.apple.services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ActionRequestHandler
+        SortingHatAppGroupIdentifier: R8HXTBY3NM.com.tcballard.sortinghat
+    settings:
+      base:
+        APPLICATION_EXTENSION_API_ONLY: true
+        CODE_SIGN_ENTITLEMENTS: Configuration/SendToSortingHatAction.entitlements
+        ENABLE_HARDENED_RUNTIME: true
+        PRODUCT_BUNDLE_IDENTIFIER: com.tcballard.sortinghat.finder-action
+        PRODUCT_MODULE_NAME: SendToSortingHatAction
+        PRODUCT_NAME: Send to Sorting Hat
+        SKIP_INSTALL: true
+schemes:
+  SortingHat:
+    build:
+      targets:
+        SortingHatApp: all
+    run:
+      config: Debug
