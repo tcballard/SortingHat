@@ -56,7 +56,8 @@ enum SortingHatCLI {
                                   guardrails: config.appleGuardrails, pccAllowed: config.allowApplePCC)
         let configuration = EvaluationConfiguration(model: model.rawValue, useCase: config.appleUseCase.rawValue,
             guardrails: config.appleGuardrails.rawValue, pccAllowed: config.allowApplePCC,
-            promptVersion: FMAnalyzer.promptVersion, operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString)
+            promptVersion: FMAnalyzer.promptVersion, operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString,
+            routingPolicyVersion: RoutingDecisionResolver.version)
         let baseline: EvaluationArtifact?
         if let path = value(after: "--baseline", in: args) {
             let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601

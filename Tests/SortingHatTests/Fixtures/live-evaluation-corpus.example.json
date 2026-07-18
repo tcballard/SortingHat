@@ -28,7 +28,7 @@
       "id": "scan-001",
       "path": "documents/scan-001.pdf",
       "kind": "scan",
-      "expected": { "folders": ["Files/2026-07"], "filename_contains": ["form"], "tags": [], "abstain": false }
+      "expected": { "folders": ["Files/2026-07"], "filename_contains": ["registration"], "tags": [], "abstain": false }
     },
     {
       "id": "screenshot-001",

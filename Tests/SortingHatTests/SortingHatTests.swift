@@ -15,7 +15,29 @@ struct EvaluationAnalyzer: FileAnalyzing {
         if file.lastPathComponent == "unsafe.txt" {
             return Decision(filename: "unsafe-renamed.txt", folder: "../Escape", tags: [], reason: "unsafe")
         }
+        if file.lastPathComponent == "unchanged.txt" {
+            return Decision(filename: "unchanged.txt", folder: "Files/2026-07", tags: [], reason: "unchanged")
+        }
         return Decision(filename: "tesco-receipt.txt", folder: "Receipts/2026", tags: ["receipt", "tesco"], reason: "receipt")
+    }
+}
+
+struct RoutingEvaluationAnalyzer: FileAnalyzing {
+    func analyze(file: URL, rules: [String]) throws -> Decision {
+        if file.lastPathComponent.hasPrefix("screenshot") {
+            return Decision(
+                filename: "settings.txt",
+                folder: "Files/2026-07",
+                tags: ["settings"],
+                reason: "No dates or file-specific context to classify this text"
+            )
+        }
+        return Decision(
+            filename: "follow-up-note.txt",
+            folder: "Files/2026-07",
+            tags: ["note"],
+            reason: "No dates or document types identified in text"
+        )
     }
 }
 
@@ -125,24 +147,32 @@ struct SortingHatTests {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let receipt = root.appending(path: "receipt.txt")
         let unsafe = root.appending(path: "unsafe.txt")
+        let unchanged = root.appending(path: "unchanged.txt")
         try "TESCO total GBP 42.18".write(to: receipt, atomically: true, encoding: .utf8)
         try "untrusted".write(to: unsafe, atomically: true, encoding: .utf8)
+        try "unchanged".write(to: unchanged, atomically: true, encoding: .utf8)
         let originalReceipt = try Data(contentsOf: receipt)
         let manifest = EvaluationManifest(version: 1, name: "synthetic", rules: ["File receipts"], cases: [
             EvaluationCase(id: "receipt", path: "receipt.txt", kind: "receipt", expected: ExpectedDecision(
                 folders: ["Receipts/2026"], filenameContains: ["tesco", "receipt"], tags: ["receipt"], abstain: false)),
             EvaluationCase(id: "unsafe", path: "unsafe.txt", kind: "ambiguous", expected: ExpectedDecision(
                 folders: ["Files/2026-07"], filenameContains: [], tags: [], abstain: false)),
+            EvaluationCase(id: "unchanged", path: "unchanged.txt", kind: "ambiguous", expected: ExpectedDecision(
+                folders: ["Files/2026-07"], filenameContains: ["unchanged"], tags: [], abstain: false)),
         ], thresholds: EvaluationThresholds(minimumAccuracy: 0.5, maximumGenerationFailureRate: 0, maximumUnsafeDecisionRate: 0))
         let configuration = EvaluationConfiguration(model: "system", useCase: "general", guardrails: "default",
             pccAllowed: false, promptVersion: "test", operatingSystem: "testOS")
 
         let artifact = LiveEvaluator.run(manifest: manifest, corpusRoot: root, analyzer: EvaluationAnalyzer(), configuration: configuration)
 
-        #expect(artifact.metrics.total == 2)
+        #expect(artifact.metrics.total == 3)
         #expect(artifact.metrics.correct == 1)
-        #expect(artifact.metrics.unsafeOrInvalidDecisions == 1)
+        #expect(artifact.metrics.unsafeOrInvalidDecisions == 2)
         #expect(artifact.thresholdFailures.contains { $0.contains("unsafe/invalid") })
+        #expect(artifact.results[2].error?.contains("original filename unchanged") == true)
+        #expect(!artifact.results[2].folderCorrect)
+        #expect(!artifact.results[2].filenameCorrect)
+        #expect(!artifact.results[2].tagsCorrect)
         #expect(try Data(contentsOf: receipt) == originalReceipt)
         #expect(FileManager.default.fileExists(atPath: unsafe.path))
     }
@@ -161,7 +191,7 @@ struct SortingHatTests {
         let baselineMetrics = EvaluationMetrics(total: 1, correct: 1, folderCorrect: 1, filenameCorrect: 1, tagsCorrect: 1,
             generationFailures: 0, schemaFailures: 0, unsafeOrInvalidDecisions: 0, abstentions: 0, accuracy: 1,
             generationFailureRate: 0, unsafeDecisionRate: 0, averageLatencyMilliseconds: 1)
-        let baseline = EvaluationArtifact(schemaVersion: 1, corpusName: "synthetic", createdAt: Date(), configuration: configuration,
+        let baseline = EvaluationArtifact(schemaVersion: 2, corpusName: "synthetic", createdAt: Date(), configuration: configuration,
             metrics: baselineMetrics, results: [], thresholdFailures: [], regressions: [])
 
         let artifact = LiveEvaluator.run(manifest: manifest, corpusRoot: root, analyzer: EvaluationAnalyzer(),
@@ -173,6 +203,67 @@ struct SortingHatTests {
         let summary = try String(contentsOf: output.appending(path: "summary.md"), encoding: .utf8)
         #expect(summary.contains("FAIL"))
         #expect(summary.contains("accuracy regressed"))
+    }
+
+    @Test func refusesAutomaticRegressionComparisonAcrossArtifactSchemas() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "TESCO".write(to: root.appending(path: "receipt.txt"), atomically: true, encoding: .utf8)
+        let manifest = EvaluationManifest(version: 1, name: "synthetic", rules: ["File receipts"], cases: [
+            EvaluationCase(id: "receipt", path: "receipt.txt", kind: "receipt", expected: ExpectedDecision(
+                folders: ["Receipts/2026"], filenameContains: ["receipt"], tags: ["receipt"], abstain: false)),
+        ], thresholds: nil)
+        let configuration = EvaluationConfiguration(model: "system", useCase: "general", guardrails: "default",
+            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS")
+        let metrics = EvaluationMetrics(total: 1, correct: 0, folderCorrect: 0, filenameCorrect: 0, tagsCorrect: 0,
+            generationFailures: 0, schemaFailures: 0, unsafeOrInvalidDecisions: 0, abstentions: 0, accuracy: 0,
+            generationFailureRate: 0, unsafeDecisionRate: 0, averageLatencyMilliseconds: 1)
+        let legacy = EvaluationArtifact(schemaVersion: 1, corpusName: "synthetic", createdAt: Date(), configuration: configuration,
+            metrics: metrics, results: [], thresholdFailures: [], regressions: [])
+
+        let artifact = LiveEvaluator.run(manifest: manifest, corpusRoot: root, analyzer: EvaluationAnalyzer(),
+                                         configuration: configuration, baseline: legacy)
+
+        #expect(artifact.regressions == ["baseline artifact schema 1 is not comparable with schema 2"])
+    }
+
+    @Test func liveEvaluationScoresResolvedShippingDecisionAndRetainsRawDiagnostics() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let screenshot = root.appending(path: "screenshot-settings.png")
+        let ambiguous = root.appending(path: "unclear.txt")
+        FileManager.default.createFile(atPath: screenshot.path, contents: Data())
+        try "Review later. Put it with the other one.".write(to: ambiguous, atomically: true, encoding: .utf8)
+        let screenshotData = try Data(contentsOf: screenshot)
+        let rules = [
+            "Put screenshots in Screenshots/YYYY-MM and tag them screenshot.",
+            "Put everything else in Files/YYYY-MM.",
+        ]
+        let manifest = EvaluationManifest(version: 1, name: "routing", rules: rules, cases: [
+            EvaluationCase(id: "screenshot", path: screenshot.lastPathComponent, kind: "screenshot", expected: ExpectedDecision(
+                folders: ["Screenshots/2026-07"], filenameContains: ["settings"], tags: ["screenshot"], abstain: false)),
+            EvaluationCase(id: "ambiguous", path: ambiguous.lastPathComponent, kind: "ambiguous", expected: ExpectedDecision(
+                folders: [], filenameContains: [], tags: [], abstain: true)),
+        ], thresholds: nil)
+        let configuration = EvaluationConfiguration(model: "system", useCase: "general", guardrails: "default",
+            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS", routingPolicyVersion: RoutingDecisionResolver.version)
+
+        let artifact = LiveEvaluator.run(
+            manifest: manifest,
+            corpusRoot: root,
+            analyzer: RoutingEvaluationAnalyzer(),
+            configuration: configuration
+        )
+
+        #expect(artifact.schemaVersion == 2)
+        #expect(artifact.metrics.correct == 2)
+        #expect(artifact.results[0].rawDecision?.folder == "Files/2026-07")
+        #expect(artifact.results[0].decision?.folder == "Screenshots/2026-07")
+        #expect(artifact.results[0].decision?.filename == "settings.png")
+        #expect(artifact.results[1].rawDecision?.folder == "Files/2026-07")
+        #expect(artifact.results[1].decision?.folder == "")
+        #expect(try Data(contentsOf: screenshot) == screenshotData)
+        #expect(FileManager.default.fileExists(atPath: ambiguous.path))
     }
 
     @Test func parsesHumanReadableConfig() throws {
@@ -412,13 +503,16 @@ struct SortingHatTests {
         #expect(throws: HatError.self) { try Organizer(inbox: inbox, rules: ["Rename files"], analyzer: analyzer).plan(source) }
     }
 
-    @Test func rejectsChangedFileExtension() throws {
+    @Test func repairsChangedFileExtensionWithoutChangingTheContainer() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let source = root.appending(path: "receipt.pdf")
         FileManager.default.createFile(atPath: source.path, contents: Data())
         let analyzer = StubAnalyzer(decision: Decision(filename: "tesco-receipt.jpg", folder: "Receipts", tags: [], reason: "receipt"))
-        #expect(throws: HatError.self) { try Organizer(inbox: root, rules: ["Rename files"], analyzer: analyzer).plan(source) }
+
+        let move = try Organizer(inbox: root, rules: ["Rename files"], analyzer: analyzer).plan(source)
+
+        #expect(move.destination.lastPathComponent == "tesco-receipt.pdf")
     }
 
     @Test func restoresMissingOriginalFileExtension() throws {
@@ -449,6 +543,80 @@ struct SortingHatTests {
             try Organizer(inbox: root, output: root.appending(path: "Filed"), rules: ["Sort it"], analyzer: analyzer).plan(source)
         }
         #expect(FileManager.default.fileExists(atPath: source.path))
+    }
+
+    @Test func compilesOnlyControlledPutRoutesWithUnicodeDestinations() throws {
+        #expect(CompiledRoutingRule("Rename files to lowercase") == nil)
+        let route = try #require(CompiledRoutingRule("Put client reports in Client Files/Årsrapporter/YYYY."))
+        let catchAll = try #require(CompiledRoutingRule("Put all other files in Files/YYYY-MM."))
+        #expect(route.subject == "client reports")
+        #expect(route.destinationTemplate == "Client Files/Årsrapporter/YYYY")
+        #expect(route.canonicalFolder(for: "client files/årsrapporter/2026") == "Client Files/Årsrapporter/2026")
+        #expect(route.sourceMatchScore(for: URL(fileURLWithPath: "/tmp/report.pdf")) == 0)
+        #expect(catchAll.isCatchAll)
+    }
+
+    @Test func resolvesStrongSourceRouteCanonicalFolderExtensionAndTags() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "Screenshot 42.png")
+        FileManager.default.createFile(atPath: source.path, contents: Data())
+        let rules = [
+            "Put screenshots in Screenshots/YYYY-MM and tag them screenshot.",
+            "Put everything else in Files/YYYY-MM.",
+        ]
+        let analyzer = StubAnalyzer(decision: Decision(
+            filename: "sorting-hat-settings.txt",
+            folder: "files/2026-07",
+            tags: ["settings"],
+            reason: "No dates or file-specific context to classify this text"
+        ))
+
+        let move = try Organizer(inbox: root, output: root.appending(path: "Filed"), rules: rules, analyzer: analyzer).plan(source)
+
+        #expect(move.destination.path.hasSuffix("Filed/Screenshots/2026-07/sorting-hat-settings.png"))
+        #expect(move.tags == ["settings", "screenshot"])
+    }
+
+    @Test func keepsExplicitlyUncertainCatchAllDecisionForReview() throws {
+        let file = URL(fileURLWithPath: "/tmp/unclear.txt")
+        let rules = ["Put receipts in Receipts/YYYY.", "Put everything else in Files/YYYY-MM."]
+        let ambiguous = Decision(
+            filename: "follow-up-note.txt",
+            folder: "Files/2026-07",
+            tags: ["note"],
+            reason: "No dates or document types identified in text"
+        )
+        let useful = Decision(
+            filename: "accessibility-checklist.txt",
+            folder: "files/2026-07",
+            tags: ["accessibility"],
+            reason: "No dates or document type keywords found in content"
+        )
+
+        let held = try RoutingDecisionResolver.resolve(file: file, decision: ambiguous, rules: rules)
+        let filed = try RoutingDecisionResolver.resolve(file: file, decision: useful, rules: rules)
+
+        #expect(held.folder == "")
+        #expect(filed.folder == "Files/2026-07")
+    }
+
+    @Test func rejectsUnconfiguredAndUnresolvedControlledDestinations() throws {
+        let file = URL(fileURLWithPath: "/tmp/note.txt")
+        let rules = ["Put everything else in Files/YYYY-MM."]
+        let unknown = Decision(filename: "planning-note.txt", folder: "Archive/2026-07", tags: [], reason: "planning")
+        let unresolved = Decision(filename: "planning-note.txt", folder: "Files/YYYY-MM", tags: [], reason: "planning")
+
+        #expect(throws: HatError.self) { try RoutingDecisionResolver.resolve(file: file, decision: unknown, rules: rules) }
+        #expect(throws: HatError.self) { try RoutingDecisionResolver.resolve(file: file, decision: unresolved, rules: rules) }
+    }
+
+    @Test func doesNotRepairUnsafeFolderEvenWhenSourceNameMatchesARoute() throws {
+        let file = URL(fileURLWithPath: "/tmp/screenshot.png")
+        let rules = ["Put screenshots in Screenshots/YYYY-MM."]
+        let unsafe = Decision(filename: "settings.png", folder: "../Escape", tags: [], reason: "screenshot")
+
+        #expect(throws: HatError.self) { try RoutingDecisionResolver.resolve(file: file, decision: unsafe, rules: rules) }
     }
 
     @Test func boundsExtractedDocumentText() throws {
