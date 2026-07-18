@@ -45,6 +45,7 @@ The Swift live evaluator is the product-quality authority. It executes the same 
 - Predeclared quality-policy commit: `dce8756e67d864a0b22229de2f95a93a96874417`
 - Sorting Hat routing commit measured: `2831277e270ec74c4ab6d996364e0b7bbfd10128`
 - Evaluator artifact-hardening commit: `fa5f2683f75762933165b88f5d801c6500d39085`
+- Prompt-comparability hardening commit: `8d32b26419220e5537fc9c883d48e0431a21947b`
 - macOS 27.0 beta, build `26A5378j`
 - MacBook Pro (`MacBookPro17,1`), Apple M1, 16 GB memory
 - Apple system model, `general` use case, default guardrails, PCC disabled
@@ -75,9 +76,9 @@ Issue #23 committed its quality and latency thresholds before the final measurem
 | Ambiguous abstention | 0/6 | 18/18 |
 | Generation failures | 0/36 | 0/108 |
 | Unsafe or invalid final decisions | 3/36 | 0/108 |
-| Mean latency | 3,641 ms | 3,935 ms (+8.1%) |
+| Mean pre-validation decision latency | 3,641 ms | 3,935 ms (+8.1%) |
 
-This clears every predeclared gate: at least 80% aggregate and 75% per-run exact accuracy, 90% folders, 85% filenames, 90% tags, 100% ambiguous abstention, at most 5% generation failures, zero unsafe/invalid final decisions, and no more than 25% mean-latency regression. One final run included a 65.6-second model response; it remains in the aggregate.
+This clears every predeclared gate: at least 80% aggregate and 75% per-run exact accuracy, 90% folders, 85% filenames, 90% tags, 100% ambiguous abstention, at most 5% generation failures, zero unsafe/invalid final decisions, and no more than 25% recorded pre-validation latency regression. The clock stops after model analysis and deterministic routing resolution, before `Organizer` validation; the baseline had no resolver, so the candidate comparison conservatively includes the added resolver work. One final run included a 65.6-second model response; it remains in the aggregate.
 
 The complete aggregate record, rejected prompt candidates, excluded infrastructure run, corpus boundary, and limitations are in [`evaluation/ROUTING_RESULTS.md`](../evaluation/ROUTING_RESULTS.md).
 
@@ -102,6 +103,6 @@ The complete aggregate record, rejected prompt candidates, excluded infrastructu
 
 ## Honest conclusion
 
-Sorting Hat goes substantially beyond the WWDC26 demo in product surface, safety, recovery, OCR, batching, local-first operation, and now a passing predeclared shipping-path quality gate. On the bounded 12-case corpus, routing policy v1 improved exact decisions from 66.7% to 100% without crossing the safety or latency limits.
+Sorting Hat goes substantially beyond the WWDC26 demo in product surface, safety, recovery, OCR, batching, local-first operation, and now a passing predeclared shipping-path quality gate. On the bounded 12-case corpus, routing policy v1 improved exact decisions from 66.7% to 100% without crossing the safety or recorded pre-validation latency limits.
 
 That makes “I built a better product than a WWDC26 demo” a defensible product headline: it compares a persistent, recoverable Mac app with an intentionally compact teaching demo. It does **not** mean Sorting Hat's model is universally more accurate than Apple's, nor that 12 private cases prove production reliability for every Inbox.
