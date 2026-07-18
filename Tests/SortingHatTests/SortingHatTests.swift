@@ -1,9 +1,11 @@
 import AppKit
+import Dispatch
 import Foundation
 import CoreGraphics
 import CoreText
 import Testing
 @testable import SortingHatCore
+@testable import SortingHatFinderAdapter
 
 struct StubAnalyzer: FileAnalyzing {
     let decision: Decision
@@ -97,6 +99,17 @@ private func writeScannedPDF(_ images: [CGImage], to file: URL) throws {
 private func containsOption(_ option: String, value: String, in arguments: [String]) -> Bool {
     guard let index = arguments.firstIndex(of: option), arguments.indices.contains(index + 1) else { return false }
     return arguments[index + 1] == value
+}
+
+private func waitForSemaphore(
+    _ semaphore: DispatchSemaphore,
+    timeout: DispatchTime
+) async -> DispatchTimeoutResult {
+    await withCheckedContinuation { continuation in
+        DispatchQueue.global(qos: .userInitiated).async {
+            continuation.resume(returning: semaphore.wait(timeout: timeout))
+        }
+    }
 }
 
 private func fakeFMExecutable(counter: URL) throws -> URL {
@@ -556,5 +569,720 @@ struct SortingHatTests {
             #expect(move.destination.lastPathComponent == evaluation.expectedFilename)
             #expect(move.destination.deletingLastPathComponent().path.hasSuffix(evaluation.expectedFolder))
         }
+    }
+
+    @Test func importsOneFileWithoutChangingTheSource() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "receipt.pdf")
+        let contents = Data("original receipt".utf8)
+        try contents.write(to: source)
+
+        let batch = InboxImportService().importFiles([source], to: inbox, accessSecurityScope: false)
+
+        #expect(batch.results.count == 1)
+        #expect(batch.failures.isEmpty)
+        #expect(batch.imported == [inbox.appending(path: "receipt.pdf")])
+        #expect(batch.statusSummary == "1 added")
+        #expect(try Data(contentsOf: source) == contents)
+        #expect(try Data(contentsOf: inbox.appending(path: "receipt.pdf")) == contents)
+    }
+
+    @Test func importsMultipleFilesWithSpacesAndUnicodeNames() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let names = ["annual receipt 2026.pdf", "Resume é 🧙.txt"]
+        let sources = try names.enumerated().map { index, name in
+            let source = sourceRoot.appending(path: name)
+            try "contents-\(index)".write(to: source, atomically: true, encoding: .utf8)
+            return source
+        }
+
+        let batch = InboxImportService().importFiles(sources, to: inbox, accessSecurityScope: false)
+
+        #expect(batch.results.count == 2)
+        #expect(batch.failures.isEmpty)
+        #expect(Set(batch.imported.map(\.lastPathComponent)) == Set(names))
+        for (index, name) in names.enumerated() {
+            #expect(try String(contentsOf: inbox.appending(path: name), encoding: .utf8) == "contents-\(index)")
+            #expect(FileManager.default.fileExists(atPath: sources[index].path))
+        }
+    }
+
+    @Test func retriesCollisionNamesWhenAnotherWriterWinsTheCopyRace() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "report.pdf")
+        try "incoming".write(to: source, atomically: true, encoding: .utf8)
+        try "existing".write(to: inbox.appending(path: "report.pdf"), atomically: true, encoding: .utf8)
+        var injectedRace = false
+        let importer = InboxImportService { _, destination in
+            if destination.lastPathComponent == "report-2.pdf", !injectedRace {
+                injectedRace = true
+                try "racing writer".write(to: destination, atomically: true, encoding: .utf8)
+            }
+        }
+
+        let batch = importer.importFiles([source], to: inbox, accessSecurityScope: false)
+
+        #expect(injectedRace)
+        #expect(batch.failures.isEmpty)
+        #expect(batch.imported.map(\.lastPathComponent) == ["report-3.pdf"])
+        #expect(try String(contentsOf: inbox.appending(path: "report.pdf"), encoding: .utf8) == "existing")
+        #expect(try String(contentsOf: inbox.appending(path: "report-2.pdf"), encoding: .utf8) == "racing writer")
+        #expect(try String(contentsOf: inbox.appending(path: "report-3.pdf"), encoding: .utf8) == "incoming")
+    }
+
+    @Test func rejectsDirectoriesWithAnExplicitPerItemFailure() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let directory = root.appending(path: "Selected Folder", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let batch = InboxImportService().importFiles([directory], to: inbox, accessSecurityScope: false)
+
+        #expect(batch.results.count == 1)
+        #expect(batch.imported.isEmpty)
+        #expect(batch.failures.count == 1)
+        #expect(batch.failures.first?.code == .unsupportedItem)
+        #expect(batch.failures.first?.filename == "Selected Folder")
+        #expect(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    @Test func retainsSuccessfulCopiesWhenOneBatchItemFails() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let names = ["first.txt", "blocked.txt", "third.txt"]
+        let sources = try names.map { name in
+            let source = sourceRoot.appending(path: name)
+            try name.write(to: source, atomically: true, encoding: .utf8)
+            return source
+        }
+        let importer = InboxImportService { source, _ in
+            if source.lastPathComponent == "blocked.txt" {
+                throw InboxImportIssue(code: .copyFailed, filename: source.lastPathComponent, message: "Injected copy failure")
+            }
+        }
+
+        let batch = importer.importFiles(sources, to: inbox, accessSecurityScope: false)
+
+        #expect(batch.results.count == 3)
+        #expect(batch.imported.map(\.lastPathComponent) == ["first.txt", "third.txt"])
+        #expect(batch.failures == [InboxImportIssue(code: .copyFailed, filename: "blocked.txt", message: "Injected copy failure")])
+        #expect(!FileManager.default.fileExists(atPath: inbox.appending(path: "blocked.txt").path))
+        #expect(sources.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+    }
+
+    @Test func treatsAFileAlreadyInTheInboxAsAnIdempotentSuccess() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let source = inbox.appending(path: "already-here.txt")
+        try "only copy".write(to: source, atomically: true, encoding: .utf8)
+
+        let batch = InboxImportService().importFiles([source], to: inbox, accessSecurityScope: false)
+
+        #expect(batch.results == [.alreadyInInbox(source: source)])
+        #expect(batch.alreadyInInboxCount == 1)
+        #expect(batch.failures.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil).count == 1)
+    }
+
+    @Test func queueEnqueueDrainAndReceiptAreIdempotent() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "queued receipt.pdf")
+        try "queued original".write(to: source, atomically: true, encoding: .utf8)
+        let id = UUID()
+        let queue = InboxImportQueue(root: queueRoot)
+
+        let firstEnqueue = try queue.enqueue(source, id: id, accessSecurityScope: false)
+        let duplicateBeforeDrain = try queue.enqueue(source, id: id, accessSecurityScope: false)
+        #expect(!firstEnqueue.wasAlreadyQueued)
+        #expect(duplicateBeforeDrain.wasAlreadyQueued)
+        #expect(queue.pendingCount() == 1)
+
+        // A fresh queue instance models the main app launching after Finder
+        // durably staged this file while Sorting Hat was closed.
+        let relaunchedQueue = InboxImportQueue(root: queueRoot)
+        let firstDrain = relaunchedQueue.drain(to: inbox)
+        let destination = inbox.appending(path: "queued receipt.pdf")
+        #expect(firstDrain.queueIssues.isEmpty)
+        #expect(firstDrain.results == [.imported(id: id, destination: destination)])
+        #expect(relaunchedQueue.pendingCount() == 0)
+        #expect(try String(contentsOf: destination, encoding: .utf8) == "queued original")
+        #expect(try String(contentsOf: source, encoding: .utf8) == "queued original")
+
+        let duplicateAfterReceipt = try queue.enqueue(source, id: id, accessSecurityScope: false)
+        let secondDrain = queue.drain(to: inbox)
+        #expect(duplicateAfterReceipt.wasAlreadyQueued)
+        #expect(duplicateAfterReceipt.filename == "queued receipt.pdf")
+        #expect(queue.pendingCount() == 0)
+        #expect(secondDrain.results.isEmpty)
+        #expect(secondDrain.queueIssues.isEmpty)
+        #expect(try FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil).map(\.lastPathComponent) == ["queued receipt.pdf"])
+    }
+
+    @Test func pausedIntakeStillImportsToInboxWithoutSorting() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        let output = root.appending(path: "Output", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "wait while paused.txt")
+        try "pause preserves intake".write(to: source, atomically: true, encoding: .utf8)
+        let queue = InboxImportQueue(root: queueRoot)
+        let queued = try queue.enqueue(source, accessSecurityScope: false)
+
+        // Pausing controls the sorter task only. The independent intake
+        // coordinator still performs this queue-to-Inbox delivery.
+        let report = queue.drain(to: inbox)
+
+        let destination = inbox.appending(path: source.lastPathComponent)
+        #expect(report == InboxQueueDrainReport(results: [.imported(id: queued.id, destination: destination)], queueIssues: []))
+        #expect(try String(contentsOf: destination, encoding: .utf8) == "pause preserves intake")
+        #expect(try String(contentsOf: source, encoding: .utf8) == "pause preserves intake")
+        #expect(try FileManager.default.contentsOfDirectory(at: output, includingPropertiesForKeys: nil).isEmpty)
+    }
+
+    @Test func queueRecoveryWaitsForAnActiveExtensionCopy() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "active large copy.txt")
+        try "complete payload".write(to: source, atomically: true, encoding: .utf8)
+
+        let copyStarted = DispatchSemaphore(value: 0)
+        let releaseCopy = DispatchSemaphore(value: 0)
+        let recoveryFinished = DispatchSemaphore(value: 0)
+        let writer = InboxImportQueue(root: queueRoot, beforePayloadCopy: {
+            copyStarted.signal()
+            releaseCopy.wait()
+        })
+        let observer = InboxImportQueue(root: queueRoot)
+
+        let enqueueTask = Task.detached {
+            try writer.enqueue(source, accessSecurityScope: false)
+        }
+        #expect(await waitForSemaphore(copyStarted, timeout: .now() + 2) == .success)
+
+        let recoveryTask = Task.detached {
+            let pending = observer.pendingImports()
+            recoveryFinished.signal()
+            return pending
+        }
+        #expect(await waitForSemaphore(recoveryFinished, timeout: .now() + 0.2) == .timedOut)
+
+        releaseCopy.signal()
+        let queued = try await enqueueTask.value
+        let pending = await recoveryTask.value
+
+        #expect(pending.map(\.id) == [queued.id])
+        #expect(observer.failures().isEmpty)
+        #expect(FileManager.default.fileExists(atPath: queueRoot.appending(path: "Pending/\(queued.id.uuidString)/payload").path))
+    }
+
+    @Test func extensionIngressDoesNotWaitForASlowInboxDrain() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+
+        let firstSource = sourceRoot.appending(path: "already staged.txt")
+        let secondSource = sourceRoot.appending(path: "arrives during drain.txt")
+        try "first payload".write(to: firstSource, atomically: true, encoding: .utf8)
+        try "second payload".write(to: secondSource, atomically: true, encoding: .utf8)
+
+        let writer = InboxImportQueue(root: queueRoot)
+        let first = try writer.enqueue(firstSource, accessSecurityScope: false)
+        let drainStarted = DispatchSemaphore(value: 0)
+        let releaseDrain = DispatchSemaphore(value: 0)
+        let ingressFinished = DispatchSemaphore(value: 0)
+        let drainer = InboxImportQueue(root: queueRoot, beforeInboxCopy: {
+            drainStarted.signal()
+            releaseDrain.wait()
+        })
+
+        let drainTask = Task.detached { drainer.drain(to: inbox) }
+        #expect(await waitForSemaphore(drainStarted, timeout: .now() + 2) == .success)
+
+        let ingressTask = Task.detached {
+            defer { ingressFinished.signal() }
+            return try writer.enqueue(secondSource, accessSecurityScope: false)
+        }
+        let ingressStatus = await waitForSemaphore(ingressFinished, timeout: .now() + 0.5)
+        releaseDrain.signal()
+        let firstDrain = await drainTask.value
+        let second = try await ingressTask.value
+        #expect(ingressStatus == .success)
+        #expect(firstDrain.queueIssues.isEmpty)
+        #expect(firstDrain.results == [.imported(id: first.id, destination: inbox.appending(path: firstSource.lastPathComponent))])
+        #expect(writer.pendingImports().map(\.id) == [second.id])
+
+        let secondDrain = writer.drain(to: inbox)
+        #expect(secondDrain.queueIssues.isEmpty)
+        #expect(secondDrain.results == [.imported(id: second.id, destination: inbox.appending(path: secondSource.lastPathComponent))])
+        #expect(try String(contentsOf: firstSource, encoding: .utf8) == "first payload")
+        #expect(try String(contentsOf: secondSource, encoding: .utf8) == "second payload")
+    }
+
+    @Test func extensionCompletionMetadataDoesNotWaitForAnotherPayloadCopy() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "large concurrent ingress.txt")
+        try "payload".write(to: source, atomically: true, encoding: .utf8)
+
+        let copyStarted = DispatchSemaphore(value: 0)
+        let releaseCopy = DispatchSemaphore(value: 0)
+        let metadataFinished = DispatchSemaphore(value: 0)
+        let writer = InboxImportQueue(root: queueRoot, beforePayloadCopy: {
+            copyStarted.signal()
+            releaseCopy.wait()
+        })
+        let observer = InboxImportQueue(root: queueRoot)
+
+        let enqueueTask = Task.detached {
+            try writer.enqueue(source, accessSecurityScope: false)
+        }
+        #expect(await waitForSemaphore(copyStarted, timeout: .now() + 2) == .success)
+
+        let metadataTask = Task.detached {
+            defer { metadataFinished.signal() }
+            try observer.recordFailure(filename: "unsupported.alias", message: "Unsupported test item")
+            try observer.recordInvocation(stagedIDs: [], failures: 1, sourceBuild: "test")
+        }
+        let metadataStatus = await waitForSemaphore(metadataFinished, timeout: .now() + 0.5)
+        releaseCopy.signal()
+
+        _ = try await enqueueTask.value
+        try await metadataTask.value
+        #expect(metadataStatus == .success)
+        #expect(observer.failures().map(\.filename) == ["unsupported.alias"])
+        #expect(observer.lastInvocation()?.failures == 1)
+    }
+
+    @Test func queueRetainsPendingPayloadUntilAnInboxFailureIsRecovered() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let unavailableInbox = root.appending(path: "Unavailable Inbox")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "retained.txt")
+        try "retain me".write(to: source, atomically: true, encoding: .utf8)
+        try "not a directory".write(to: unavailableInbox, atomically: true, encoding: .utf8)
+        let id = UUID()
+        let queue = InboxImportQueue(root: queueRoot)
+        try queue.enqueue(source, id: id, accessSecurityScope: false)
+
+        let failedDrain = queue.drain(to: unavailableInbox)
+
+        #expect(failedDrain.results.isEmpty)
+        #expect(failedDrain.queueIssues.map(\.code) == [.inboxUnavailable])
+        #expect(queue.pendingCount() == 1)
+        #expect(FileManager.default.fileExists(atPath: queueRoot.appending(path: "Pending/\(id.uuidString)/payload").path))
+
+        try FileManager.default.removeItem(at: unavailableInbox)
+        let recoveredDrain = queue.drain(to: unavailableInbox)
+        #expect(recoveredDrain.queueIssues.isEmpty)
+        #expect(recoveredDrain.results == [.imported(id: id, destination: unavailableInbox.appending(path: "retained.txt"))])
+        #expect(queue.pendingCount() == 0)
+        #expect(try String(contentsOf: unavailableInbox.appending(path: "retained.txt"), encoding: .utf8) == "retain me")
+    }
+
+    @Test func retryDoesNotDuplicateAVisibleFileWhenReceiptWritingFailed() throws {
+        struct ReceiptWriteFailure: Error {}
+
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "exactly once.txt")
+        try "one visible copy".write(to: source, atomically: true, encoding: .utf8)
+
+        let queue = InboxImportQueue(root: queueRoot)
+        let queued = try queue.enqueue(source, accessSecurityScope: false)
+        let failingDrainer = InboxImportQueue(root: queueRoot, beforeReceiptWrite: {
+            throw ReceiptWriteFailure()
+        })
+
+        let interrupted = failingDrainer.drain(to: inbox)
+        let destination = inbox.appending(path: source.lastPathComponent)
+        #expect(interrupted.results.isEmpty)
+        #expect(interrupted.queueIssues.count == 1)
+        #expect(FileManager.default.fileExists(atPath: destination.path))
+        #expect(queue.pendingCount() == 1)
+
+        try queue.retryPending(id: queued.id, in: inbox)
+        let recovered = queue.drain(to: inbox)
+
+        #expect(recovered.queueIssues.isEmpty)
+        #expect(recovered.results == [.imported(id: queued.id, destination: destination)])
+        #expect(queue.pendingCount() == 0)
+        #expect(try FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil).map(\.lastPathComponent) == [source.lastPathComponent])
+        #expect(try String(contentsOf: destination, encoding: .utf8) == "one visible copy")
+        #expect(try String(contentsOf: source, encoding: .utf8) == "one visible copy")
+    }
+
+    @Test func retryDoesNotReimportACommittedFileThatHasAlreadyBeenFiled() throws {
+        struct ReceiptWriteFailure: Error {}
+
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        let filedRoot = root.appending(path: "Filed", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: filedRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "filed before receipt.txt")
+        try "already delivered".write(to: source, atomically: true, encoding: .utf8)
+
+        let queue = InboxImportQueue(root: queueRoot)
+        let queued = try queue.enqueue(source, accessSecurityScope: false)
+        let failingDrainer = InboxImportQueue(root: queueRoot, beforeReceiptWrite: {
+            throw ReceiptWriteFailure()
+        })
+        let interrupted = failingDrainer.drain(to: inbox)
+        let inboxDestination = inbox.appending(path: source.lastPathComponent)
+        let filedDestination = filedRoot.appending(path: source.lastPathComponent)
+        #expect(interrupted.results.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: inboxDestination.path))
+
+        try FileManager.default.moveItem(at: inboxDestination, to: filedDestination)
+        try queue.retryPending(id: queued.id, in: inbox)
+        let recovered = queue.drain(to: inbox)
+
+        #expect(recovered.queueIssues.isEmpty)
+        #expect(recovered.results == [.imported(id: queued.id, destination: inboxDestination)])
+        #expect(queue.pendingCount() == 0)
+        #expect(!FileManager.default.fileExists(atPath: inboxDestination.path))
+        #expect(try String(contentsOf: filedDestination, encoding: .utf8) == "already delivered")
+        #expect(try String(contentsOf: source, encoding: .utf8) == "already delivered")
+    }
+
+    @Test func queuePersistsAndDrainsALargeFinderBatchWithoutLoss() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let queue = InboxImportQueue(root: queueRoot)
+
+        for index in 0..<256 {
+            let source = sourceRoot.appending(path: "batch item \(index) 🧙.txt")
+            try "payload-\(index)".write(to: source, atomically: true, encoding: .utf8)
+            try queue.enqueue(source, accessSecurityScope: false)
+        }
+
+        #expect(queue.pendingCount() == 256)
+        let relaunchedQueue = InboxImportQueue(root: queueRoot)
+        let report = relaunchedQueue.drain(to: inbox)
+
+        #expect(report.queueIssues.isEmpty)
+        #expect(report.results.count == 256)
+        #expect(relaunchedQueue.pendingCount() == 0)
+        #expect(try FileManager.default.contentsOfDirectory(at: inbox, includingPropertiesForKeys: nil).count == 256)
+        #expect(try FileManager.default.contentsOfDirectory(at: sourceRoot, includingPropertiesForKeys: nil).count == 256)
+    }
+
+    @Test func bookmarkStoreReportsMissingStaleAndInvalidAccess() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+
+        let missingRoot = root.appending(path: "Missing", directoryHint: .isDirectory)
+        let missing = InboxAccessBookmarkStore(root: missingRoot) { _ in
+            Issue.record("A missing bookmark must not invoke its resolver")
+            return (inbox, false)
+        }
+        #expect(missing.resolve() == .missing)
+        #expect(missing.resolve().needsRecovery)
+
+        let staleRoot = root.appending(path: "Stale", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: staleRoot, withIntermediateDirectories: true)
+        try Data("bookmark".utf8).write(to: staleRoot.appending(path: "Inbox.bookmark"))
+        let stale = InboxAccessBookmarkStore(root: staleRoot) { data in
+            #expect(data == Data("bookmark".utf8))
+            return (inbox, true)
+        }
+        #expect(stale.resolve() == .stale(inbox))
+        #expect(stale.resolve().needsRecovery)
+
+        let invalidRoot = root.appending(path: "Invalid", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: invalidRoot, withIntermediateDirectories: true)
+        try Data("broken".utf8).write(to: invalidRoot.appending(path: "Inbox.bookmark"))
+        let invalid = InboxAccessBookmarkStore(root: invalidRoot) { _ in
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let invalidState = invalid.resolve()
+        if case .invalid(let message) = invalidState {
+            #expect(!message.isEmpty)
+        } else {
+            Issue.record("Expected invalid bookmark state, got \(invalidState)")
+        }
+        #expect(invalidState.needsRecovery)
+    }
+
+    @Test func bookmarkStoreRoundTripsAndActivatesRealInboxAccess() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let accessRoot = root.appending(path: "Private Application Support", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let store = InboxAccessBookmarkStore(root: accessRoot)
+
+        try store.save(inbox)
+        let resolved = store.resolve(expectedInbox: inbox)
+        guard case .available(let resolvedInbox) = resolved else {
+            Issue.record("Expected a live bookmark, got \(resolved)")
+            return
+        }
+
+        let accessing = resolvedInbox.startAccessingSecurityScopedResource()
+        defer { if accessing { resolvedInbox.stopAccessingSecurityScopedResource() } }
+        #expect(accessing)
+        #expect(try resolvedInbox.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true)
+        #expect(resolvedInbox.standardizedFileURL == inbox.standardizedFileURL)
+    }
+
+    @Test func decodesTheDataBackedFileURLRepresentationFinderActuallyProvides() throws {
+        let source = URL(fileURLWithPath: "/private/tmp/Finder receipt ü.pdf")
+
+        let decoded = FileURLRepresentationDecoder.decode(source.dataRepresentation)
+
+        #expect(decoded == source)
+        #expect(FileURLRepresentationDecoder.decode(Data("not a URL".utf8)) == nil)
+    }
+
+    @Test func finderItemProviderAdapterLoadsTheRealDataBackedFileURL() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "Finder provider ü.pdf")
+        try "provider source".write(to: source, atomically: true, encoding: .utf8)
+        let provider = try #require(NSItemProvider(contentsOf: source))
+
+        let decoded: URL = try await withCheckedThrowingContinuation { continuation in
+            FinderItemProviderAdapter.loadFileURL(from: provider) { result in
+                switch result {
+                case .success(let url): continuation.resume(returning: url)
+                case .failure(let error): continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        #expect(decoded == source)
+        #expect(try String(contentsOf: decoded, encoding: .utf8) == "provider source")
+    }
+
+    @Test func finderActionBatchPolicyBoundsEverySelectionAndByteBudget() {
+        let policy = FinderActionBatchPolicy(
+            maximumItems: 4,
+            maximumFileBytes: 100,
+            maximumTotalBytes: 250,
+            timeoutSeconds: 5
+        )
+
+        #expect(!policy.itemCountIsAllowed(0))
+        #expect(policy.itemCountIsAllowed(4))
+        #expect(!policy.itemCountIsAllowed(5))
+        #expect(policy.limitForFile(byteCount: 100, alreadyAccepted: 150) == nil)
+        #expect(policy.limitForFile(byteCount: -1, alreadyAccepted: 0) == .unknownFileSize)
+        #expect(policy.limitForFile(byteCount: 101, alreadyAccepted: 0) == .fileTooLarge(maximumBytes: 100))
+        #expect(policy.limitForFile(byteCount: 100, alreadyAccepted: 151) == .batchTooLarge(maximumBytes: 250))
+    }
+
+    @Test func queueValidatesTheOriginalFinderNameInsteadOfAProviderTemporaryName() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Provider", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let materialized = sourceRoot.appending(path: ".provider-temporary-value")
+        try "visible original".write(to: materialized, atomically: true, encoding: .utf8)
+        let queue = InboxImportQueue(root: queueRoot)
+
+        try queue.enqueue(materialized, originalFilename: "Visible receipt ü.txt", accessSecurityScope: false)
+        let report = queue.drain(to: inbox)
+
+        #expect(report.queueIssues.isEmpty)
+        #expect(try String(contentsOf: inbox.appending(path: "Visible receipt ü.txt"), encoding: .utf8) == "visible original")
+        #expect(FileManager.default.fileExists(atPath: materialized.path))
+
+        #expect(throws: InboxImportIssue.self) {
+            try queue.enqueue(materialized, originalFilename: ".hidden-original", accessSecurityScope: false)
+        }
+    }
+
+    @Test func queuePromotesACompleteStagingDirectoryAfterAnExtensionCrash() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "interrupted.txt")
+        try "complete staged payload".write(to: source, atomically: true, encoding: .utf8)
+        let id = UUID()
+        let queue = InboxImportQueue(root: queueRoot)
+        try queue.enqueue(source, id: id, accessSecurityScope: false)
+        try FileManager.default.moveItem(
+            at: queueRoot.appending(path: "Pending/\(id.uuidString)"),
+            to: queueRoot.appending(path: ".staging/\(id.uuidString)")
+        )
+
+        let report = queue.drain(to: inbox)
+
+        #expect(report.queueIssues.isEmpty)
+        #expect(report.results == [.imported(id: id, destination: inbox.appending(path: "interrupted.txt"))])
+        #expect(queue.pendingCount() == 0)
+    }
+
+    @Test func queueQuarantinesAnIncompleteExtensionCopyAndMakesTheFailureVisible() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let id = UUID()
+        let staging = queueRoot.appending(path: ".staging/\(id.uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        let record = """
+        {"enqueuedAt":"2026-07-18T12:00:00Z","id":"\(id.uuidString)","originalFilename":"interrupted copy.txt"}
+        """
+        try record.write(to: staging.appending(path: "staging.json"), atomically: true, encoding: .utf8)
+        try "partial".write(to: staging.appending(path: "payload.partial"), atomically: true, encoding: .utf8)
+        let queue = InboxImportQueue(root: queueRoot)
+
+        let report = queue.drain(to: inbox)
+
+        #expect(report.results.isEmpty)
+        #expect(queue.pendingCount() == 0)
+        #expect(queue.failures().contains { $0.filename == "interrupted copy.txt" && $0.message.lowercased().contains("reselect") })
+        #expect(try FileManager.default.contentsOfDirectory(at: queueRoot.appending(path: "Quarantine"), includingPropertiesForKeys: nil).count == 1)
+    }
+
+    @Test func queueRepairsAnInterruptedHiddenInboxCopyFromItsAuthoritativePayload() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "large report.txt")
+        try "authoritative contents".write(to: source, atomically: true, encoding: .utf8)
+        let id = UUID()
+        let queue = InboxImportQueue(root: queueRoot)
+        try queue.enqueue(source, id: id, accessSecurityScope: false)
+        try "truncated".write(
+            to: inbox.appending(path: ".sortinghat-import-\(id.uuidString).partial"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let report = queue.drain(to: inbox)
+
+        #expect(report.queueIssues.isEmpty)
+        #expect(try String(contentsOf: inbox.appending(path: "large report.txt"), encoding: .utf8) == "authoritative contents")
+    }
+
+    @Test func failedPendingItemsPauseUntilAnExplicitRetry() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "recoverable.txt")
+        try "correct".write(to: source, atomically: true, encoding: .utf8)
+        let id = UUID()
+        let queue = InboxImportQueue(root: queueRoot)
+        try queue.enqueue(source, id: id, accessSecurityScope: false)
+        let payload = queueRoot.appending(path: "Pending/\(id.uuidString)/payload")
+        try "corrupt".write(to: payload, atomically: true, encoding: .utf8)
+
+        _ = queue.drain(to: inbox)
+        let failed = try #require(queue.pendingImports().first)
+        #expect(failed.lastError != nil)
+        _ = queue.drain(to: inbox)
+        #expect(queue.pendingImports().first?.attempts == failed.attempts)
+
+        try FileManager.default.removeItem(at: payload)
+        try FileManager.default.copyItem(at: source, to: payload)
+        try queue.retryPending(id: id, in: inbox)
+        let recovered = queue.drain(to: inbox)
+        #expect(recovered.queueIssues.isEmpty)
+        #expect(queue.pendingCount() == 0)
+        #expect(try String(contentsOf: inbox.appending(path: "recoverable.txt"), encoding: .utf8) == "correct")
+    }
+
+    @Test func legacyMigrationProofRequiresCurrentBuildReceiptsInTheConfiguredInbox() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let sourceRoot = root.appending(path: "Source", directoryHint: .isDirectory)
+        let queueRoot = root.appending(path: "Queue", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: sourceRoot, withIntermediateDirectories: true)
+        let source = sourceRoot.appending(path: "proof.txt")
+        try "proof".write(to: source, atomically: true, encoding: .utf8)
+        let id = UUID()
+        let queue = InboxImportQueue(root: queueRoot)
+        try queue.enqueue(source, id: id, accessSecurityScope: false)
+        try queue.recordInvocation(stagedIDs: [id], failures: 0, sourceBuild: "26")
+        let invocation = try #require(queue.lastInvocation())
+
+        #expect(!queue.deliveriesConfirmed(for: invocation, to: inbox, currentBuild: "26"))
+        _ = queue.drain(to: inbox)
+        #expect(queue.deliveriesConfirmed(for: invocation, to: inbox, currentBuild: "26"))
+        #expect(!queue.deliveriesConfirmed(for: invocation, to: inbox, currentBuild: "27"))
+        #expect(!queue.deliveriesConfirmed(for: invocation, to: root.appending(path: "Other Inbox"), currentBuild: "26"))
+    }
+
+    @Test func bookmarkAccessFailsClosedWhenItTargetsAFormerInbox() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let accessRoot = root.appending(path: "Access", directoryHint: .isDirectory)
+        let formerInbox = root.appending(path: "Former Inbox", directoryHint: .isDirectory)
+        let configuredInbox = root.appending(path: "Configured Inbox", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: accessRoot, withIntermediateDirectories: true)
+        try Data("bookmark".utf8).write(to: accessRoot.appending(path: "Inbox.bookmark"))
+        let store = InboxAccessBookmarkStore(root: accessRoot) { _ in (formerInbox, false) }
+
+        #expect(store.resolve(expectedInbox: configuredInbox) == .mismatched(bookmarked: formerInbox, expected: configuredInbox))
+        #expect(store.resolve(expectedInbox: configuredInbox).needsRecovery)
     }
 }
