@@ -34,6 +34,11 @@ failure dismissal remain in the main app.
   already staged successes remain safe when another item fails. Larger files
   can still use **Add Files** inside Sorting Hat, which is not constrained by
   the Finder extension's lifetime.
+- Finder can suppress third-party Action Extensions for a directory-only
+  selection before the extension runs (observed on macOS 27). In that case
+  nothing is copied or changed. If a directory is supplied in an invocation,
+  Sorting Hat rejects it as an explicit per-item failure while preserving any
+  successfully staged files.
 
 The extension uses Apple's `com.apple.services` action-extension point and
 `NSItemProvider` file representations. It never requests Full Disk Access and
@@ -54,6 +59,8 @@ stops safely until **Settings → Finder → Repair Inbox Access** succeeds.
 macOS disables newly installed Action Extensions until the user enables them.
 Open **System Settings → General → Login Items & Extensions → Finder**, enable
 **Send to Sorting Hat**, then use it from Finder's **Quick Actions** menu.
+Finder can cache extension availability. If the newly enabled action is still
+missing, relaunch Finder once before treating registration as failed.
 
 Sorting Hat reports whether the extension is embedded, whether the shared
 container is available, the last invocation, queued items, Inbox permission,
@@ -77,6 +84,13 @@ available only after the current app build has an immutable native invocation
 record, matching delivery receipts, no pending staged copies, and no unresolved
 delivery failure for that invocation. It then moves the workflow into an
 Application Support backup; it does not delete it or modify any selected file.
+
+Finder may de-duplicate the legacy workflow and native extension because they
+have the same user-facing name. Before native-delivery proof exists, **Settings
+→ Finder** can move the legacy workflow into the same reversible Application
+Support backup so the native item becomes visible. Invoke the native action,
+confirm delivery there, and keep the backup until you are satisfied with the
+new path. The original Finder selections are never moved or deleted.
 
 Migration is reversible from **Settings → Finder → Restore Legacy Action**.
 Finder may need to be refreshed before a retired or restored action disappears

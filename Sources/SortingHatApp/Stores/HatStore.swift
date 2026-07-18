@@ -394,7 +394,33 @@ final class HatStore {
                 message: "Use the native Finder action successfully before retiring the legacy workflow."
             )
         }
+        try moveLegacyQuickActionToBackup(
+            status: "Legacy Quick Action moved to backup; Finder may take a moment to refresh"
+        )
+    }
+
+    func prepareNativeQuickActionVerification() throws {
+        guard canPrepareNativeQuickActionVerification else {
+            throw InboxImportIssue(
+                code: .sharedContainerUnavailable,
+                filename: "Send to Sorting Hat.workflow",
+                message: "Install a signed build containing the native Finder action before hiding the legacy workflow."
+            )
+        }
+        try moveLegacyQuickActionToBackup(
+            status: "Legacy Quick Action backed up; relaunch Finder to verify the native action"
+        )
+    }
+
+    private func moveLegacyQuickActionToBackup(status newStatus: String) throws {
         let source = Self.legacyQuickActionURL
+        guard FileManager.default.fileExists(atPath: source.path) else {
+            throw InboxImportIssue(
+                code: .copyFailed,
+                filename: source.lastPathComponent,
+                message: "The legacy workflow is no longer installed."
+            )
+        }
         let backupRoot = FileManager.default.homeDirectoryForCurrentUser
             .appending(path: "Library/Application Support/SortingHat/Legacy Quick Actions", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: backupRoot, withIntermediateDirectories: true)
@@ -405,7 +431,7 @@ final class HatStore {
         UserDefaults.standard.set(destination.path, forKey: "legacyQuickActionBackupPath")
         legacyQuickActionBackupURL = destination
         legacyQuickActionInstalled = false
-        status = "Legacy Quick Action moved to backup; Finder may take a moment to refresh"
+        status = newStatus
     }
 
     func restoreLegacyQuickAction() throws {
@@ -435,6 +461,10 @@ final class HatStore {
 
     var canMigrateLegacyQuickAction: Bool {
         finderExtensionEmbedded && finderDeliveryConfirmed && finderPendingImports == 0
+    }
+
+    var canPrepareNativeQuickActionVerification: Bool {
+        finderExtensionEmbedded && finderSharedContainerAvailable && !finderDeliveryConfirmed && legacyQuickActionInstalled
     }
 
     private func bootstrap() {

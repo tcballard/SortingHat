@@ -60,15 +60,13 @@ targets:
         CFBundleVersion: "1"
         NSExtension:
           NSExtensionAttributes:
-            NSExtensionActivationRule:
-              NSExtensionActivationDictionaryVersion: 1
-              NSExtensionActivationSupportsAttachmentsWithMinCount: 1
-              NSExtensionActivationSupportsFileWithMaxCount: 256
-              NSExtensionActivationUsesStrictMatching: true
+            # Match the selected files' content types here. The handler loads
+            # their separate public.file-url transport representations.
+            NSExtensionActivationRule: 'SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == $extensionItem.attachments.@count).@count == 1'
             NSExtensionServiceAllowsFinderPreviewItem: true
             NSExtensionServiceFinderPreviewIconName: NSActionTemplate
             NSExtensionServiceFinderPreviewLabel: Send to Sorting Hat
-            NSExtensionServiceRoleType: NSExtensionServiceRoleTypeViewer
+            NSExtensionServiceRoleType: NSExtensionServiceRoleTypeEditor
           NSExtensionPointIdentifier: com.apple.services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ActionRequestHandler
         SortingHatAppGroupIdentifier: R8HXTBY3NM.com.tcballard.sortinghat

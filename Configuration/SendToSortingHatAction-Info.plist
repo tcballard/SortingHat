@@ -25,16 +25,7 @@
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>NSExtensionActivationRule</key>
-			<dict>
-				<key>NSExtensionActivationDictionaryVersion</key>
-				<integer>1</integer>
-				<key>NSExtensionActivationSupportsAttachmentsWithMinCount</key>
-				<integer>1</integer>
-				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
-				<integer>256</integer>
-				<key>NSExtensionActivationUsesStrictMatching</key>
-				<true/>
-			</dict>
+			<string>SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == $extensionItem.attachments.@count).@count == 1</string>
 			<key>NSExtensionServiceAllowsFinderPreviewItem</key>
 			<true/>
 			<key>NSExtensionServiceFinderPreviewIconName</key>
@@ -42,7 +33,7 @@
 			<key>NSExtensionServiceFinderPreviewLabel</key>
 			<string>Send to Sorting Hat</string>
 			<key>NSExtensionServiceRoleType</key>
-			<string>NSExtensionServiceRoleTypeViewer</string>
+			<string>NSExtensionServiceRoleTypeEditor</string>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.services</string>

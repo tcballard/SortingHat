@@ -73,11 +73,9 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$extension_info" | grep -Fx com.apple.services
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$extension_info" | grep -Fx SendToSortingHatAction.ActionRequestHandler
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceFinderPreviewLabel" "$extension_info" | grep -Fx "Send to Sorting Hat"
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeViewer
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeEditor
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceAllowsFinderPreviewItem" "$extension_info" | grep -Fx true
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsAttachmentsWithMinCount" "$extension_info" | grep -Fx 1
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsFileWithMaxCount" "$extension_info" | grep -Fx 256
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationUsesStrictMatching" "$extension_info" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule" "$extension_info" | grep -Fx 'SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == $extensionItem.attachments.@count).@count == 1'
       - name: Notarize and staple app
         env:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
@@ -137,11 +135,9 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$extension_info" | grep -Fx com.apple.services
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$extension_info" | grep -Fx SendToSortingHatAction.ActionRequestHandler
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceFinderPreviewLabel" "$extension_info" | grep -Fx "Send to Sorting Hat"
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeViewer
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeEditor
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceAllowsFinderPreviewItem" "$extension_info" | grep -Fx true
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsAttachmentsWithMinCount" "$extension_info" | grep -Fx 1
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationSupportsFileWithMaxCount" "$extension_info" | grep -Fx 256
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule:NSExtensionActivationUsesStrictMatching" "$extension_info" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule" "$extension_info" | grep -Fx 'SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == $extensionItem.attachments.@count).@count == 1'
       - name: Publish signed pre-release
         env:
           GH_TOKEN: ${{ github.token }}

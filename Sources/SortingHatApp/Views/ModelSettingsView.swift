@@ -21,6 +21,7 @@ struct ModelSettingsView: View {
     @State private var choosingOutput = false
     @State private var repairingInboxAccess = false
     @State private var confirmingLegacyMigration = false
+    @State private var confirmingLegacyVerification = false
     @State private var pendingRemoval: InboxPendingImportRecord?
 
     init(store: HatStore) {
@@ -101,6 +102,16 @@ struct ModelSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Sorting Hat moves the Automator workflow into its Application Support backup. It never changes any source files.")
+        }
+        .confirmationDialog(
+            "Make the native Quick Action visible?",
+            isPresented: $confirmingLegacyVerification,
+            titleVisibility: .visible
+        ) {
+            Button("Back Up Legacy Workflow") { prepareNativeActionVerification() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Finder may hide the native action because the Automator workflow has the same name. Sorting Hat will move that workflow into a reversible backup. Relaunch Finder, then verify one native import. No selected files are changed.")
         }
         .confirmationDialog(
             "Remove this staged import?",
@@ -213,7 +224,7 @@ struct ModelSettingsView: View {
                     }
                 }
 
-                Text("macOS disables new Quick Actions by default. In System Settings, open General → Login Items & Extensions → Finder and enable “Send to Sorting Hat”. Send up to 256 files at a time (256 MB per file, 1 GB total); larger files can use Add Files here. If the app is closed, Finder keeps a durable staged copy and Sorting Hat imports it on the next launch. Pausing stops sorting, not intake.")
+                Text("Enable “Send to Sorting Hat” in System Settings → General → Login Items & Extensions → Finder. Select up to 256 files (256 MB each, 1 GB total); use Add Files for larger items. Pausing stops sorting, not intake, and closed apps import on next launch. If the action is missing after enabling, relaunch Finder once.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -278,27 +289,33 @@ struct ModelSettingsView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Legacy Automator action detected")
-                            Text(store.canMigrateLegacyQuickAction
-                                 ? "This installed build delivered its last native Finder import to the configured Inbox. The old workflow can be backed up."
-                                 : "Complete and deliver a native Finder import with this installed build before retiring the old workflow.")
+                            Text(legacyActionGuidance)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("Retire Legacy Action…") { confirmingLegacyMigration = true }
-                            .disabled(!store.canMigrateLegacyQuickAction)
+                        if store.canMigrateLegacyQuickAction {
+                            Button("Retire Legacy Action…") { confirmingLegacyMigration = true }
+                        } else {
+                            Button("Show Native Action…") { confirmingLegacyVerification = true }
+                                .disabled(!store.canPrepareNativeQuickActionVerification)
+                        }
                     }
                 } else if let backup = store.legacyQuickActionBackupURL {
                     Divider()
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Legacy Automator action backed up")
+                            Text(store.finderDeliveryConfirmed
+                                 ? "Legacy Automator action retired"
+                                 : "Legacy Automator action temporarily hidden")
                             Text(backup.path(percentEncoded: false))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
                                 .truncationMode(.middle)
-                            Text("If Finder still shows the old Service, relaunch Finder. Restore is available here if you need to roll back.")
+                            Text(store.finderDeliveryConfirmed
+                                 ? "Native delivery is verified. Restore remains available if you need to roll back."
+                                 : "Relaunch Finder, invoke the native action once, then return here. Restore remains available at any time.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -325,6 +342,16 @@ struct ModelSettingsView: View {
         return store.finderDeliveryConfirmed
             ? "Bundled and used successfully"
             : "Bundled — enable it in System Settings"
+    }
+
+    private var legacyActionGuidance: String {
+        if store.canMigrateLegacyQuickAction {
+            return "This installed build delivered its last native Finder import to the configured Inbox. The old workflow can now be retired to a reversible backup."
+        }
+        if store.canPrepareNativeQuickActionVerification {
+            return "Finder can hide the native item because both actions share this name. Back up the legacy workflow, relaunch Finder, then verify one native import."
+        }
+        return "Install a signed build containing the native Finder action before changing the legacy workflow."
     }
 
     private var sharedIntakeDetail: String {
@@ -463,6 +490,17 @@ struct ModelSettingsView: View {
             try store.migrateLegacyQuickAction()
             errorMessage = nil
             savedMessage = "Legacy Quick Action moved to backup"
+        } catch {
+            savedMessage = nil
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func prepareNativeActionVerification() {
+        do {
+            try store.prepareNativeQuickActionVerification()
+            errorMessage = nil
+            savedMessage = "Legacy Quick Action backed up for native verification"
         } catch {
             savedMessage = nil
             errorMessage = error.localizedDescription

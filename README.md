@@ -55,7 +55,12 @@ Sorting Hat.
 Enable the action in **System Settings → General → Login Items & Extensions →
 Finder**. macOS offers no reliable public API for checking whether the action
 is enabled, so confirm the installed build by invoking it from Finder's
-right-click **Quick Actions** menu. Integration health, Inbox permission
+right-click **Quick Actions** menu. Finder can cache extension availability;
+if the newly enabled action is missing, relaunch Finder once before diagnosing
+registration. Older Sorting Hat installs may also have an Automator action
+with the same name that masks the native item. **Sorting Hat Settings →
+Finder** provides a reversible migration path that preserves the workflow as a
+backup until the native delivery is verified. Integration health, Inbox permission
 repair, queued copies, failures, and **Retry** or **Remove** recovery actions
 are available under **Sorting Hat Settings → Finder**. See the [native Finder
 Quick Action architecture and migration notes](docs/finder-quick-action.md).
