@@ -86,12 +86,14 @@ public enum RoutingDecisionResolver {
             "insufficient", "not enough", "no clear", "lacks clear", "unclear", "ambiguous",
             "cannot determine", "unable to determine", "unknown", "no dates or document type",
             "no date or document type", "no dates or file-specific context",
+            "no identifiable document type", "no identifiable context", "no specific context",
+            "no recognizable subject", "lacks recognizable subject", "lacks a recognizable subject",
         ]
         guard uncertaintyPhrases.contains(where: reason.contains) else { return false }
 
         let genericTags: Set<String> = [
             "file", "files", "document", "documents", "general", "note", "other", "review",
-            "text", "uncategorized", "unknown",
+            "text", "uncategorized", "unknown", "follow-up", "follow up",
         ]
         return decision.tags.allSatisfy {
             genericTags.contains($0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())

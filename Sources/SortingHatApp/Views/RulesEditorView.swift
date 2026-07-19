@@ -262,7 +262,7 @@ private struct RuleBuilderSheet: View {
         isGenerating = true; errorMessage = nil
         let request = intent
         Task {
-            do { plan = try await Task.detached { try RulePlanGenerator().generate(from: request) }.value }
+            do { plan = try await RulePlanGenerator().generate(from: request) }
             catch { errorMessage = error.localizedDescription }
             isGenerating = false
         }

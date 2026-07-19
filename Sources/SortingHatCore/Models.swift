@@ -69,11 +69,11 @@ public enum HatError: Error, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .invalidConfig(let message): "Invalid config: \(message)"
-        case .fmUnavailable: "Apple's on-device Foundation Model is unavailable. It requires macOS 27, Apple Intelligence, and a downloaded system model."
+        case .fmUnavailable: "Apple's on-device Foundation Model is unavailable. It requires a supported Apple Intelligence device, Apple Intelligence enabled, and a downloaded system model."
         case .pccConsentRequired: "Private Cloud Compute requires explicit permission in Model Settings before files can be sent to Apple."
         case .pccUnavailable(let message): "Apple Private Cloud Compute is unavailable: \(message)"
         case .pccLimitReached(let message): "Apple Private Cloud Compute usage limit was reached: \(message)"
-        case .invalidResponse(let response): "fm returned an invalid decision: \(response)"
+        case .invalidResponse(let response): "Apple Foundation Models returned an invalid decision: \(response)"
         case .invalidDecision(let message): "Invalid sorting decision: \(message)"
         case .needsReview(let message): "Needs review: \(message)"
         case .contentExtractionFailed(let message): "Could not read file content: \(message)"

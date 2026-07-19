@@ -14,7 +14,7 @@
 ## Requirements
 
 - macOS 14 or later for the menu-bar app
-- macOS 27 plus Apple Intelligence for Apple's built-in `fm` model, or [Ollama](https://ollama.com/) with a local model on earlier macOS versions
+- macOS 26 plus Apple Intelligence for Apple's native on-device Foundation Model, or [Ollama](https://ollama.com/) with a local model on earlier macOS versions
 - Swift 6.2+ to build from source
 - XcodeGen 2.44.1 to regenerate the checked-in native app project
 
@@ -91,11 +91,11 @@ rules:
 
 Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Apple can use the local `system` model, Private Cloud Compute (`pcc`), or an automatic policy. Automatic always tries on-device first and retries PCC only after an availability or generation failure. Content extraction, unsafe paths, and invalid filing decisions never trigger cloud escalation. PCC is disabled until `allow_apple_pcc: true` is explicitly saved; enabling it means file context may be sent to Apple's Private Cloud Compute service. Overall provider selection then falls back to configured Ollama and OpenAI providers when Apple is unavailable.
 
-For the on-device system model, `apple_use_case: content-tagging` opts into the `fm` content-tagging specialization. `apple_guardrails: permissive-content-transformations` relaxes the system model's content-transformation guardrails for filing material that the default policy refuses; use the default unless your rules require that behavior. These system-only options are omitted from PCC requests. Apple requests continue using guided JSON output, deterministic generation, and native multimodal input for supported images. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`.
+For the on-device system model, `apple_use_case: content-tagging` opts into the Foundation Models framework's content-tagging specialization. `apple_guardrails: permissive-content-transformations` relaxes the system model's content-transformation guardrails for filing material that the default policy refuses; use the default unless your rules require that behavior. These system-only options are omitted from PCC requests. Apple requests use in-process guided generation and greedy sampling. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`.
 
 Sorting Hat reads searchable PDFs, plain-text formats, RTF, Word, and OpenDocument files. For scanned PDFs and receipt images, it uses Apple's local Vision framework to recognize text before asking the selected model to name and file the document. Embedded PDF text is preferred, so searchable PDFs avoid unnecessary OCR. Extraction is limited to the first 5 pages and 12,000 characters; the source file is never modified. If a scanned PDF cannot be rendered or contains no sufficiently confident text, Sorting Hat leaves it in the Inbox and reports the extraction failure.
 
-When Apple `fm` is selected, compatible non-image files are analyzed in batches of at most 8 files and 24,000 extracted characters. Each file is identified by an opaque request-local ID, and every returned decision is independently validated before any move. Missing, duplicate, unexpected, or unsafe decisions cannot be applied. Images remain on the individual multimodal path, and a failed batch does not prevent files in other batches from being processed. A deterministic process benchmark verifies that 8 compatible files use 1 `fm respond` invocation instead of 8.
+When Apple's on-device model is selected, each file is analyzed through an isolated native Foundation Models guided-generation request. Every decision is independently validated before any move, and one failed file does not prevent other Inbox items from being processed. Image and scanned-document text is extracted locally with Vision before inference. Sorting Hat deliberately favours reliable per-file naming and review decisions over an unverified native batching throughput claim; the legacy PCC research adapter retains bounded batching.
 
 The Inbox is intake-only. Sorting Hat renames each file and moves it to a rule-specific folder under `output` (for example, `~/SortingHat/Receipts/2026`). For the rule builder's controlled `Put ... in ...` routes, deterministic Swift code canonicalises the model's proposal against configured destinations and rejects unknown or unresolved folders. When at least one controlled route is present, its compiled destinations form the authoritative allow-list for that ruleset; other prose can still guide naming, tagging, and classification but cannot introduce a new destination. Sorting Hat creates destination folders as needed, rejects absolute paths and traversal, preserves the source file type, protects existing files with numbered names, and writes tags as Finder metadata.
 
@@ -123,7 +123,7 @@ Live quality checks are deliberately opt-in and read-only. Create a private, ano
   --config sortinghat.conf
 ```
 
-The manifest is versioned and contains rules plus cases with a relative source path, content kind (`receipt`, `scan`, `screenshot`, `pdf`, `office_document`, or `ambiguous`), accepted folders, required filename terms, required tags, and whether an empty-folder abstention is expected. The checked-in template defines all six required classes but deliberately includes no documents. Corpus files must sit beside or below the manifest; output inside that corpus directory is rejected. The evaluator calls Apple `fm` but never calls `Organizer.apply`, so sources are not renamed, tagged, or moved.
+The manifest is versioned and contains rules plus cases with a relative source path, content kind (`receipt`, `scan`, `screenshot`, `pdf`, `office_document`, or `ambiguous`), accepted folders, required filename terms, required tags, and whether an empty-folder abstention is expected. The checked-in template defines all six required classes but deliberately includes no documents. Corpus files must sit beside or below the manifest; output inside that corpus directory is rejected. System-model evaluation calls the same native Foundation Models analyzer as the app but never calls `Organizer.apply`, so sources are not renamed, tagged, or moved. PCC research retains the command-line adapter until the macOS 27 native PCC API can be compiled and validated with Xcode 27.
 
 Each run writes `evaluation.json` and `summary.md`. In schema-v2 artifacts, `raw_decision` is the model's direct proposal before deterministic routing policy, while `decision` is the resolved and validated shipping-path result that the evaluator scores. The artifact also records model, OS, prompt and routing-policy versions, validation errors, pre-validation decision latency, accuracy, generation failures, unsafe/invalid decisions, and abstentions. Latency stops after analysis and deterministic routing resolution, before the separate `Organizer` validation pass. Pass a schema-compatible previous `evaluation.json` with `--baseline` to expose regressions; incompatible schemas, corpora, prompts, routing policies, or model environments are reported instead of being compared silently. Exit status `2` means a threshold or baseline check failed; `1` means the evaluation could not run. Do not commit corpus documents or results containing private or copyrighted content; only the synthetic manifest example belongs in the repository.
 
@@ -142,7 +142,9 @@ swift test
 ./script/generate_xcode_project.sh
 ```
 
-Inference is behind `FileAnalyzing`, so filesystem behavior and safety can be tested without a model. Provider selection prefers Apple `fm` when available and otherwise uses the configured local Ollama endpoint.
+Inference is behind `FileAnalyzing`, so filesystem behavior and safety can be tested without a model. Provider selection prefers Apple's in-process Foundation Models framework when available and otherwise uses the configured local Ollama endpoint.
+
+The Foundation Models decision path can be shared by a future iPhone or iPad client, but iOS intake cannot behave like a continuously watched Mac folder. See the explicit [iOS client boundary](docs/ios-client-architecture.md) for the reusable layers and the required Files/Share-extension architecture.
 
 ## Release status
 

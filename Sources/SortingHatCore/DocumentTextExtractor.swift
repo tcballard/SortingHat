@@ -154,22 +154,11 @@ public enum DocumentTextExtractor {
     }
 
     private static func convertDocumentToText(_ file: URL) -> String? {
-        let executable = "/usr/bin/textutil"
-        guard FileManager.default.isExecutableFile(atPath: executable) else { return nil }
-        let converted = FileManager.default.temporaryDirectory.appending(path: "sorting-hat-\(UUID().uuidString).txt")
-        defer { try? FileManager.default.removeItem(at: converted) }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = ["-convert", "txt", "-output", converted.path, file.path]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else { return nil }
-            return try? String(contentsOf: converted, encoding: .utf8)
-        } catch {
-            return nil
-        }
+        var attributes: NSDictionary?
+        return try? NSAttributedString(
+            url: file,
+            options: [:],
+            documentAttributes: &attributes
+        ).string
     }
 }

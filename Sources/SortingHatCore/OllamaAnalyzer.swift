@@ -1,7 +1,7 @@
 import Foundation
 
 public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
-    public let fm: FMAnalyzer
+    public let fm: NativeFoundationModelsAnalyzer
     public let pcc: FMAnalyzer
     public let ollama: OllamaAnalyzer?
     public let openAI: OpenAIAnalyzer?
@@ -21,7 +21,7 @@ public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
         appleGuardrails: AppleGuardrails = .default,
         allowApplePCC: Bool = false
     ) {
-        fm = FMAnalyzer(executable: fmExecutable, model: .system, useCase: appleUseCase, guardrails: appleGuardrails)
+        fm = NativeFoundationModelsAnalyzer(useCase: appleUseCase, guardrails: appleGuardrails)
         pcc = FMAnalyzer(executable: fmExecutable, model: .pcc, useCase: appleUseCase, guardrails: appleGuardrails, pccAllowed: allowApplePCC)
         let model = ollamaModel.trimmingCharacters(in: .whitespacesAndNewlines)
         ollama = model.isEmpty ? nil : OllamaAnalyzer(baseURL: ollamaURL, model: model)
