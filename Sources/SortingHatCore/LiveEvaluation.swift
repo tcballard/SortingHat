@@ -46,14 +46,24 @@ public struct EvaluationConfiguration: Codable, Sendable {
     public let pccAllowed: Bool
     public let promptVersion: String
     public let operatingSystem: String
+    public let routingPolicyVersion: String?
 
-    public init(model: String, useCase: String, guardrails: String, pccAllowed: Bool, promptVersion: String, operatingSystem: String) {
+    public init(
+        model: String,
+        useCase: String,
+        guardrails: String,
+        pccAllowed: Bool,
+        promptVersion: String,
+        operatingSystem: String,
+        routingPolicyVersion: String? = nil
+    ) {
         self.model = model
         self.useCase = useCase
         self.guardrails = guardrails
         self.pccAllowed = pccAllowed
         self.promptVersion = promptVersion
         self.operatingSystem = operatingSystem
+        self.routingPolicyVersion = routingPolicyVersion
     }
 
     enum CodingKeys: String, CodingKey {
@@ -62,6 +72,7 @@ public struct EvaluationConfiguration: Codable, Sendable {
         case pccAllowed = "pcc_allowed"
         case promptVersion = "prompt_version"
         case operatingSystem = "operating_system"
+        case routingPolicyVersion = "routing_policy_version"
     }
 }
 
@@ -98,6 +109,7 @@ public struct EvaluationResult: Codable, Sendable {
     public let id: String
     public let kind: String
     public let latencyMilliseconds: Double
+    public let rawDecision: Decision?
     public let decision: Decision?
     public let error: String?
     public let folderCorrect: Bool
@@ -108,6 +120,7 @@ public struct EvaluationResult: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, kind, decision, error, abstained
+        case rawDecision = "raw_decision"
         case latencyMilliseconds = "latency_ms"
         case folderCorrect = "folder_correct"
         case filenameCorrect = "filename_correct"
@@ -160,34 +173,58 @@ public enum LiveEvaluator {
         baseline: EvaluationArtifact? = nil
     ) -> EvaluationArtifact {
         let root = corpusRoot.standardizedFileURL
+        let referenceDate = Date()
+        let recordedConfiguration = EvaluationConfiguration(
+            model: configuration.model,
+            useCase: configuration.useCase,
+            guardrails: configuration.guardrails,
+            pccAllowed: configuration.pccAllowed,
+            promptVersion: configuration.promptVersion,
+            operatingSystem: configuration.operatingSystem,
+            routingPolicyVersion: RoutingDecisionResolver.version
+        )
         let results = manifest.cases.map { item -> EvaluationResult in
             let file = root.appending(path: item.path).standardizedFileURL
             let started = ContinuousClock.now
+            var rawDecision: Decision?
             do {
-                let decision = try analyzer.analyze(file: file, rules: manifest.rules)
+                let raw = try analyzer.analyze(file: file, rules: manifest.rules)
+                rawDecision = raw
+                let decision = try RoutingDecisionResolver.resolve(
+                    file: file,
+                    decision: raw,
+                    rules: manifest.rules,
+                    referenceDate: referenceDate
+                )
                 let elapsed = milliseconds(since: started)
                 let abstained = decision.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                let folderCorrect = item.expected.abstain ? abstained : item.expected.folders.contains(decision.folder)
+                let validationError = validate(
+                    file: file,
+                    decision: decision,
+                    rules: manifest.rules,
+                    referenceDate: referenceDate
+                )
+                let valid = validationError == nil
+                let folderCorrect = valid && (item.expected.abstain ? abstained : item.expected.folders.contains(decision.folder))
                 let loweredName = decision.filename.lowercased()
-                let filenameCorrect = item.expected.filenameContains.allSatisfy { loweredName.contains($0.lowercased()) }
+                let filenameCorrect = valid && item.expected.filenameContains.allSatisfy { loweredName.contains($0.lowercased()) }
                 let loweredTags = Set(decision.tags.map { $0.lowercased() })
-                let tagsCorrect = item.expected.tags.allSatisfy { loweredTags.contains($0.lowercased()) }
-                let invalid = validate(file: file, decision: decision, rules: manifest.rules) != nil
-                return EvaluationResult(id: item.id, kind: item.kind, latencyMilliseconds: elapsed, decision: decision,
-                                        error: nil, folderCorrect: folderCorrect, filenameCorrect: filenameCorrect,
-                                        tagsCorrect: tagsCorrect, abstained: abstained, unsafeOrInvalid: invalid)
+                let tagsCorrect = valid && item.expected.tags.allSatisfy { loweredTags.contains($0.lowercased()) }
+                return EvaluationResult(id: item.id, kind: item.kind, latencyMilliseconds: elapsed, rawDecision: rawDecision, decision: decision,
+                                        error: validationError?.localizedDescription, folderCorrect: folderCorrect, filenameCorrect: filenameCorrect,
+                                        tagsCorrect: tagsCorrect, abstained: abstained, unsafeOrInvalid: !valid)
             } catch {
                 return EvaluationResult(id: item.id, kind: item.kind, latencyMilliseconds: milliseconds(since: started),
-                                        decision: nil, error: error.localizedDescription, folderCorrect: false,
+                                        rawDecision: rawDecision, decision: nil, error: error.localizedDescription, folderCorrect: false,
                                         filenameCorrect: false, tagsCorrect: false, abstained: false,
                                         unsafeOrInvalid: isUnsafeOrInvalid(error))
             }
         }
         let metrics = metrics(for: results)
-        return EvaluationArtifact(schemaVersion: 1, corpusName: manifest.name, createdAt: Date(), configuration: configuration,
+        return EvaluationArtifact(schemaVersion: 2, corpusName: manifest.name, createdAt: referenceDate, configuration: recordedConfiguration,
                                   metrics: metrics, results: results,
                                   thresholdFailures: thresholdFailures(metrics, manifest.thresholds),
-                                  regressions: regressions(metrics, baseline?.metrics))
+                                  regressions: regressions(metrics, baseline: baseline, corpusName: manifest.name, configuration: recordedConfiguration))
     }
 
     public static func write(_ artifact: EvaluationArtifact, to outputDirectory: URL) throws {
@@ -208,6 +245,7 @@ public enum LiveEvaluator {
         Corpus: \(artifact.corpusName)
         Model: \(artifact.configuration.model) (\(artifact.configuration.useCase))
         Prompt: \(artifact.configuration.promptVersion)
+        Routing policy: \(artifact.configuration.routingPolicyVersion ?? "legacy")
         OS: \(artifact.configuration.operatingSystem)
 
         | Metric | Result |
@@ -220,7 +258,7 @@ public enum LiveEvaluator {
         | Schema failures | \(artifact.metrics.schemaFailures) |
         | Unsafe/invalid decisions | \(artifact.metrics.unsafeOrInvalidDecisions) |
         | Abstentions | \(artifact.metrics.abstentions) |
-        | Average latency | \(String(format: "%.1f ms", artifact.metrics.averageLatencyMilliseconds)) |
+        | Average pre-validation latency | \(String(format: "%.1f ms", artifact.metrics.averageLatencyMilliseconds)) |
 
         ## Thresholds and regressions
 
@@ -228,13 +266,21 @@ public enum LiveEvaluator {
         """
     }
 
-    private static func validate(file: URL, decision: Decision, rules: [String]) -> Error? {
+    private static func validate(file: URL, decision: Decision, rules: [String], referenceDate: Date) -> Error? {
         if decision.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
         struct FixedAnalyzer: FileAnalyzing {
             let decision: Decision
             func analyze(file: URL, rules: [String]) throws -> Decision { decision }
         }
-        do { _ = try Organizer(inbox: file.deletingLastPathComponent(), rules: rules, analyzer: FixedAnalyzer(decision: decision)).plan(file); return nil }
+        do {
+            _ = try Organizer(
+                inbox: file.deletingLastPathComponent(),
+                rules: rules,
+                analyzer: FixedAnalyzer(decision: decision),
+                referenceDate: referenceDate
+            ).plan(file)
+            return nil
+        }
         catch { return error }
     }
 
@@ -262,12 +308,35 @@ public enum LiveEvaluator {
         return failures
     }
 
-    private static func regressions(_ metrics: EvaluationMetrics, _ baseline: EvaluationMetrics?) -> [String] {
+    private static func regressions(
+        _ metrics: EvaluationMetrics,
+        baseline: EvaluationArtifact?,
+        corpusName: String,
+        configuration: EvaluationConfiguration
+    ) -> [String] {
         guard let baseline else { return [] }
+        guard baseline.schemaVersion == 2 else {
+            return ["baseline artifact schema \(baseline.schemaVersion) is not comparable with schema 2"]
+        }
+        guard baseline.corpusName == corpusName, baseline.metrics.total == metrics.total else {
+            return ["baseline corpus does not match this evaluation"]
+        }
+        let baselineConfiguration = baseline.configuration
+        guard baselineConfiguration.model == configuration.model,
+              baselineConfiguration.useCase == configuration.useCase,
+              baselineConfiguration.guardrails == configuration.guardrails,
+              baselineConfiguration.pccAllowed == configuration.pccAllowed,
+              baselineConfiguration.operatingSystem == configuration.operatingSystem,
+              baselineConfiguration.promptVersion == configuration.promptVersion,
+              baselineConfiguration.routingPolicyVersion == configuration.routingPolicyVersion else {
+            return ["baseline evaluation configuration does not match this evaluation"]
+        }
+
         var values: [String] = []
-        if metrics.accuracy < baseline.accuracy { values.append("accuracy regressed from \(percent(baseline.accuracy)) to \(percent(metrics.accuracy))") }
-        if metrics.generationFailureRate > baseline.generationFailureRate { values.append("generation failure rate regressed") }
-        if metrics.unsafeDecisionRate > baseline.unsafeDecisionRate { values.append("unsafe/invalid decision rate regressed") }
+        let baselineMetrics = baseline.metrics
+        if metrics.accuracy < baselineMetrics.accuracy { values.append("accuracy regressed from \(percent(baselineMetrics.accuracy)) to \(percent(metrics.accuracy))") }
+        if metrics.generationFailureRate > baselineMetrics.generationFailureRate { values.append("generation failure rate regressed") }
+        if metrics.unsafeDecisionRate > baselineMetrics.unsafeDecisionRate { values.append("unsafe/invalid decision rate regressed") }
         return values
     }
 

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "minimum_corpus_cases": 12,
+  "minimum_comparable_runs": 3,
+  "required_kinds": [
+    "receipt",
+    "scan",
+    "screenshot",
+    "pdf",
+    "office_document",
+    "ambiguous"
+  ],
+  "thresholds": {
+    "aggregate_exact_accuracy": 0.8,
+    "minimum_run_exact_accuracy": 0.75,
+    "folder_accuracy": 0.9,
+    "filename_accuracy": 0.85,
+    "tag_accuracy": 0.9,
+    "ambiguous_abstention_accuracy": 1.0,
+    "maximum_generation_failure_rate": 0.05,
+    "maximum_unsafe_or_invalid_decisions": 0,
+    "maximum_mean_latency_regression": 0.25
+  }
+}

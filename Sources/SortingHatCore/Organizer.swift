@@ -5,11 +5,22 @@ public struct Organizer {
     public let output: URL
     public let rules: [String]
     public let analyzer: any FileAnalyzing
+    public let referenceDate: Date
     public var fileManager = FileManager.default
-    public init(inbox: URL, output: URL? = nil, rules: [String], analyzer: any FileAnalyzing, fileManager: FileManager = .default) {
+    public init(
+        inbox: URL,
+        output: URL? = nil,
+        rules: [String],
+        analyzer: any FileAnalyzing,
+        referenceDate: Date = .now,
+        fileManager: FileManager = .default
+    ) {
         self.inbox = inbox
         self.output = output ?? inbox.deletingLastPathComponent()
-        self.rules = rules; self.analyzer = analyzer; self.fileManager = fileManager
+        self.rules = rules
+        self.analyzer = analyzer
+        self.referenceDate = referenceDate
+        self.fileManager = fileManager
     }
 
     public func candidates() throws -> [URL] {
@@ -26,6 +37,10 @@ public struct Organizer {
     public func plan(_ file: URL) throws -> PlannedMove {
         let decision = try analyzer.analyze(file: file, rules: rules)
         return try plan(file, decision: decision)
+    }
+
+    public func resolve(_ file: URL, decision: Decision) throws -> Decision {
+        try RoutingDecisionResolver.resolve(file: file, decision: decision, rules: rules, referenceDate: referenceDate)
     }
 
     public func planAll(_ files: [URL]) -> [PlanningOutcome] {
@@ -60,6 +75,7 @@ public struct Organizer {
     }
 
     private func plan(_ file: URL, decision: Decision) throws -> PlannedMove {
+        let decision = try resolve(file, decision: decision)
         let proposedFolder = decision.folder.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !proposedFolder.isEmpty else {
             throw HatError.needsReview(decision.reason)

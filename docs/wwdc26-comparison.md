@@ -20,12 +20,12 @@ That demo is intentionally compact and excellent at teaching the platform primit
 | Interaction | Terminal/script | Native menu-bar app with Inbox, activity, rules, model settings, pause, retry, resolve, and remove actions |
 | Model policy | On-device or PCC examples | On-device first; PCC is explicit opt-in; local Ollama and configured OpenAI fallbacks |
 | Throughput | One model call for the filename list | Up to 8 compatible files or 24,000 extracted characters per validated batch |
-| Evaluation | Notebook-style prompt comparison | Locked CLI harness, private corpus contract, prompt/use-case matrix, raw artifacts, deterministic tests, and predeclared tool gates |
+| Evaluation | Notebook-style prompt comparison | Shipping-path Swift gate, private corpus contract, prompt/use-case research matrix, raw/resolved artifacts, deterministic tests, and predeclared gates |
 
 ## Architecture
 
 ```text
-Inbox -> settle -> extract/OCR -> batch or image analysis -> validate
+Inbox -> settle -> extract/OCR -> batch or image analysis -> resolve/validate
       -> rename/tag/move -> Activity
                        \-> Needs review -> retry/resolve/remove
 ```
@@ -36,54 +36,61 @@ Images use the multimodal `fm` path. Searchable documents prefer embedded text; 
 
 ## Reproducible evaluation
 
-The corpus is deliberately private and lives outside the repository. The checked-in evaluator, prompt definitions, matrix, lockfile, tests, and synthetic manifest contract are public. This avoids publishing personal documents or copyrighted test files while still making the method repeatable with an equivalent corpus.
+The corpus is deliberately private and lives outside the repository. The checked-in evaluator, policy, tests, and synthetic manifest contract are public. This avoids publishing personal documents or copyrighted test files while keeping the method repeatable with an equivalent corpus.
 
-### Environment recorded for the 18 July 2026 run
+The Swift live evaluator is the product-quality authority. It executes the same PDF/text/Vision extraction, routing policy, extension handling, validator, and manual-review decision the app uses, but never calls `Organizer.apply`.
 
-- Sorting Hat commit: `e53c0d352428cc0e8f11a4c626996a5dd492de34`
+### Environment recorded for the 18 July 2026 result
+
+- Predeclared quality-policy commit: `dce8756e67d864a0b22229de2f95a93a96874417`
+- Sorting Hat routing commit measured: `2831277e270ec74c4ab6d996364e0b7bbfd10128`
+- Evaluator artifact-hardening commit: `fa5f2683f75762933165b88f5d801c6500d39085`
+- Prompt-comparability hardening commit: `8d32b26419220e5537fc9c883d48e0431a21947b`
 - macOS 27.0 beta, build `26A5378j`
 - MacBook Pro (`MacBookPro17,1`), Apple M1, 16 GB memory
-- Apple system model reported available
-- Python 3.12.13; dependencies pinned by `evaluation/uv.lock`
-- Corpus: `sorting-hat-representative-v1`, six anonymized cases
-- One case each: receipt, scan, screenshot, searchable PDF, office document, and ambiguous input
-- Four filing rules; exact folder, filename-term, tag, abstention, and generation-failure scoring
+- Apple system model, `general` use case, default guardrails, PCC disabled
+- Prompt `sorting-decision-v2`; deterministic policy `routing-rules-v1`
+- Corpus `sorting-hat-representative-v2`, 12 private anonymized cases
+- Corpus manifest SHA-256 `ff11e1e1d670e46765f734d27dc5386f8a4d0f92d5e17078b38751275f402fcd`
+- Coverage includes receipts, scan/OCR, screenshots, searchable PDF, office document, ambiguous notes, generic/no-date text, and adversarial prompt-like content
 
-### Commands
-
-Run the fully on-device rows:
+### Command
 
 ```sh
-cd evaluation
-uv sync --frozen --no-editable
-uv run sortinghat-evaluate \
-  --corpus ~/SortingHat-Evaluation/corpus/corpus.json \
-  --matrix system-matrix.json \
-  --prompts prompts.json \
-  --output ~/SortingHat-Evaluation/results/run-001
+.build/debug/sorting-hat evaluate --live \
+  --corpus ~/SortingHat-Evaluation/corpus-v2/corpus.json \
+  --output ~/SortingHat-Evaluation/results/run-001 \
+  --config sortinghat.conf
 ```
 
-Running the full `matrix.json` instead requires `--allow-pcc`; that flag is an explicit acknowledgement that corpus context may leave the Mac for Apple Private Cloud Compute.
+### Shipping-path result
 
-### On-device results
+Issue #23 committed its quality and latency thresholds before the final measurements. The corrected pre-policy baseline ran three times; the final implementation ran nine times after a latency outlier made a larger sample useful. Every valid final run is included.
 
-The latest completed local run produced 17 structured responses from 18 attempts. Strict end-to-end accuracy was **0/6 for every variant** because none chose an exact accepted destination; this is a real negative result and means Sorting Hat has not yet earned a measured “better than Apple” quality claim.
+| Metric | Corrected baseline | Routing policy v1 |
+| --- | ---: | ---: |
+| Exact decision | 24/36 (66.7%) | 108/108 (100%) |
+| Exact folder | 24/36 (66.7%) | 108/108 (100%) |
+| Required filename terms | 36/36 (100%) | 108/108 (100%) |
+| Required tags | 33/36 (91.7%) | 108/108 (100%) |
+| Ambiguous abstention | 0/6 | 18/18 |
+| Generation failures | 0/36 | 0/108 |
+| Unsafe or invalid final decisions | 3/36 | 0/108 |
+| Mean pre-validation decision latency | 3,641 ms | 3,935 ms (+8.1%) |
 
-| Variant | Exact decisions | Folder | Filename | Tags | Generation failures | Mean latency |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Concise / system / general | 0/6 | 0/6 | 3/6 | 6/6 | 0/6 | 4,309 ms |
-| Detailed / system / general | 0/6 | 0/6 | 3/6 | 6/6 | 0/6 | 1,925 ms |
-| Detailed / system / content-tagging | 0/6 | 0/6 | 2/6 | 5/6 | 1/6 | 2,188 ms |
+This clears every predeclared gate: at least 80% aggregate and 75% per-run exact accuracy, 90% folders, 85% filenames, 90% tags, 100% ambiguous abstention, at most 5% generation failures, zero unsafe/invalid final decisions, and no more than 25% recorded pre-validation latency regression. The clock stops after model analysis and deterministic routing resolution, before `Organizer` validation; the baseline had no resolver, so the candidate comparison conservatively includes the added resolver work. One final run included a 65.6-second model response; it remains in the aggregate.
 
-The detailed prompt reduced excess information from 1.50 to 0.83 items per case and was faster in this run. Content-tagging missed more required information and had one generation failure. Six cases and one run are too small for statistical claims.
+The complete aggregate record, rejected prompt candidates, excluded infrastructure run, corpus boundary, and limitations are in [`evaluation/ROUTING_RESULTS.md`](../evaluation/ROUTING_RESULTS.md).
 
-The PCC row was run after explicit approval to send the anonymized corpus context to Apple. All six requests failed before inference with `PCC inference is not available in this context`; the evaluator classifies these as infrastructure failures. The roughly 13 ms rejection time is not reported as model latency or quality evidence. PCC therefore remains **inconclusive**, rather than a 0% quality result.
+### Negative and supporting evidence
 
-### Other measured evidence
-
-- Batching: the deterministic process test verifies 8 compatible files use 1 `fm respond` process instead of 8. This is an invocation-count result, not a wall-clock throughput claim.
-- OCR: deterministic fixtures cover successful Vision extraction, confidence filtering, scanned-PDF fallback, and safe failure. The six-case model matrix is too small to claim an OCR accuracy rate.
-- Tool calling: four bounded, read-only candidates were tested. None cleared the predeclared accuracy/failure/500 ms latency gate; see [`evaluation/TOOL_RESULTS.md`](../evaluation/TOOL_RESULTS.md).
+- Prompt-only versions v3, v4, and v5 regressed accuracy, safety, and latency and were rejected. The passing change keeps the faster v2 prompt and resolves controlled destinations in Swift.
+- PR #22's standalone Python matrix scored 0/6, but Issue #23 found that binary documents had silently fallen back to filename-only input. That result remains useful prompt research, not shipping-path product evidence.
+- One candidate run encountered three local Vision failures before inference. It is retained as infrastructure evidence and excluded from quality scoring under the committed policy.
+- The explicitly approved PCC run still failed before inference because PCC was unavailable in this context. PCC remains inconclusive and outside the on-device gate.
+- Batching: a deterministic process test verifies 8 compatible files use 1 `fm respond` process instead of 8. This is an invocation-count result, not a wall-clock throughput claim.
+- OCR: deterministic fixtures cover successful Vision extraction, confidence filtering, scanned-PDF fallback, and safe failure. The private corpus is too small to claim a general OCR accuracy rate.
+- Tool calling: four bounded, read-only candidates were rejected by their separate predeclared quality/failure/latency gate; see [`evaluation/TOOL_RESULTS.md`](../evaluation/TOOL_RESULTS.md).
 
 ## Privacy and limitations
 
@@ -96,4 +103,6 @@ The PCC row was run after explicit approval to send the anonymized corpus contex
 
 ## Honest conclusion
 
-Sorting Hat already goes substantially beyond the WWDC26 demo in product surface, safety, recovery, OCR, batching, and local-first operation. The current benchmark does **not** show superior classification quality. The defensible headline today is “I turned Apple’s WWDC file-sorting demo into a real Mac app”; “better” should wait for a larger corpus and a passing quality result.
+Sorting Hat goes substantially beyond the WWDC26 demo in product surface, safety, recovery, OCR, batching, local-first operation, and now a passing predeclared shipping-path quality gate. On the bounded 12-case corpus, routing policy v1 improved exact decisions from 66.7% to 100% without crossing the safety or recorded pre-validation latency limits.
+
+That makes “I built a better product than a WWDC26 demo” a defensible product headline: it compares a persistent, recoverable Mac app with an intentionally compact teaching demo. It does **not** mean Sorting Hat's model is universally more accurate than Apple's, nor that 12 private cases prove production reliability for every Inbox.
