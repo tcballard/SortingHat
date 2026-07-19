@@ -2,11 +2,13 @@ import Foundation
 
 public struct InboxAccessBookmarkStore {
     private let root: URL
+    private let name: String
     private let fileManager: FileManager
     private let resolver: (Data) throws -> (URL, Bool)
 
-    public init(root: URL, fileManager: FileManager = .default) {
+    public init(root: URL, name: String = "Inbox", fileManager: FileManager = .default) {
         self.root = root
+        self.name = name
         self.fileManager = fileManager
         resolver = { data in
             var stale = false
@@ -22,10 +24,12 @@ public struct InboxAccessBookmarkStore {
 
     init(
         root: URL,
+        name: String = "Inbox",
         fileManager: FileManager = .default,
         resolver: @escaping (Data) throws -> (URL, Bool)
     ) {
         self.root = root
+        self.name = name
         self.fileManager = fileManager
         self.resolver = resolver
     }
@@ -112,8 +116,8 @@ public struct InboxAccessBookmarkStore {
         return try? decoder.decode(InboxAccessMetadata.self, from: data)
     }
 
-    private var bookmarkURL: URL { root.appending(path: "Inbox.bookmark") }
-    private var metadataURL: URL { root.appending(path: "Inbox.json") }
+    private var bookmarkURL: URL { root.appending(path: "\(name).bookmark") }
+    private var metadataURL: URL { root.appending(path: "\(name).json") }
 
     private func restore(_ data: Data?, to url: URL) throws {
         if let data {

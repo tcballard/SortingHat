@@ -140,6 +140,9 @@ Bounded tool-calling candidates are also evaluated there under a documented thre
 ```sh
 swift test
 ./script/generate_xcode_project.sh
+./script/preflight_app_store.sh
+# After one-time notarytool Keychain setup:
+./script/release_local.sh 0.2.0
 ```
 
 Inference is behind `FileAnalyzing`, so filesystem behavior and safety can be tested without a model. Provider selection prefers Apple's in-process Foundation Models framework when available and otherwise uses the configured local Ollama endpoint.
@@ -149,3 +152,5 @@ The Foundation Models decision path can be shared by a future iPhone or iPad cli
 ## Release status
 
 Release archives are currently ad-hoc signed and published as GitHub pre-releases. Before treating Sorting Hat as production-ready, releases must be signed with a **Developer ID Application** certificate using the hardened runtime, submitted to Apple for notarization, stapled, and validated with Gatekeeper. See [Apple's Gatekeeper guidance](https://support.apple.com/en-gb/102445) and [Apple's notarization documentation](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+
+Developer ID/Homebrew and Mac App Store are separate tracked channels. The Store build has its own sandboxed configuration and structural preflight; it is not upload-ready until the matching Apple Distribution identity, profiles, App Store Connect record, metadata, and installed-build verification exist. See the [distribution guide](docs/distribution.md), [Issue #24](https://github.com/tcballard/SortingHat/issues/24), and [Issue #29](https://github.com/tcballard/SortingHat/issues/29).

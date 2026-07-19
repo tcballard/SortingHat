@@ -1,4 +1,8 @@
 name: SortingHat
+configs:
+  Debug: debug
+  Release: release
+  AppStore: release
 options:
   bundleIdPrefix: com.tcballard
   deploymentTarget:
@@ -19,6 +23,8 @@ targets:
     platform: macOS
     sources:
       - Sources/SortingHatApp
+      - path: Configuration/PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       - package: SortingHatPackage
         product: SortingHatCore
@@ -33,6 +39,7 @@ targets:
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "14.0"
         LSUIElement: true
+        ITSAppUsesNonExemptEncryption: false
         NSHumanReadableCopyright: Copyright © 2026 Tom Ballard. All rights reserved.
         NSPrincipalClass: NSApplication
         SortingHatAppGroupIdentifier: R8HXTBY3NM.com.tcballard.sortinghat
@@ -42,6 +49,9 @@ targets:
         ENABLE_HARDENED_RUNTIME: true
         PRODUCT_BUNDLE_IDENTIFIER: com.tcballard.sortinghat
         PRODUCT_NAME: Sorting Hat
+      configs:
+        AppStore:
+          CODE_SIGN_ENTITLEMENTS: Configuration/SortingHatApp-AppStore.entitlements
   SendToSortingHatAction:
     type: app-extension
     platform: macOS
@@ -86,3 +96,13 @@ schemes:
         SortingHatApp: all
     run:
       config: Debug
+    archive:
+      config: Release
+  SortingHatAppStore:
+    build:
+      targets:
+        SortingHatApp: all
+    run:
+      config: AppStore
+    archive:
+      config: AppStore

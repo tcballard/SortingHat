@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+DERIVED_DATA="${SORTING_HAT_APP_STORE_DERIVED_DATA:-${TMPDIR%/}/SortingHatAppStoreDerivedData}"
+ARCHIVE_PATH="${SORTING_HAT_APP_STORE_ARCHIVE:-${TMPDIR%/}/SortingHat-AppStore-Preflight.xcarchive}"
+APP="$ARCHIVE_PATH/Products/Applications/Sorting Hat.app"
+EXTENSION="$APP/Contents/PlugIns/Send to Sorting Hat.appex"
+APP_ENTITLEMENTS="$ROOT_DIR/Configuration/SortingHatApp-AppStore.entitlements"
+EXTENSION_ENTITLEMENTS="$ROOT_DIR/Configuration/SendToSortingHatAction.entitlements"
+APP_BINARY="$APP/Contents/MacOS/Sorting Hat"
+PRIVACY_MANIFEST="$APP/Contents/Resources/PrivacyInfo.xcprivacy"
+
+rm -rf "$DERIVED_DATA" "$ARCHIVE_PATH"
+xcodebuild \
+  -quiet \
+  -project "$ROOT_DIR/SortingHat.xcodeproj" \
+  -scheme SortingHatAppStore \
+  -configuration AppStore \
+  -derivedDataPath "$DERIVED_DATA" \
+  -clonedSourcePackagesDirPath "$DERIVED_DATA/SourcePackages" \
+  -archivePath "$ARCHIVE_PATH" \
+  CODE_SIGNING_ALLOWED=NO \
+  archive
+
+test -d "$APP"
+test -d "$EXTENSION"
+test -x "$APP_BINARY"
+test -f "$PRIVACY_MANIFEST"
+test "$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -type d -name '*.app' | wc -l | tr -d ' ')" = "1"
+plutil -lint "$APP/Contents/Info.plist" "$EXTENSION/Contents/Info.plist" "$PRIVACY_MANIFEST" >/dev/null
+
+if strings "$APP_BINARY" | grep -Fq "/usr/bin/fm"; then
+  echo "App Store binary unexpectedly contains the legacy fm executable path." >&2
+  exit 1
+fi
+
+# Ad-hoc signing is only for structural entitlement inspection. App Store
+# submission still requires Apple Distribution identities and matching profiles.
+xattr -cr "$APP"
+codesign --force --sign - --timestamp=none --options runtime \
+  --entitlements "$EXTENSION_ENTITLEMENTS" "$EXTENSION"
+codesign --force --sign - --timestamp=none --options runtime \
+  --entitlements "$APP_ENTITLEMENTS" "$APP"
+codesign --verify --strict --verbose=2 "$EXTENSION"
+codesign --verify --deep --strict --verbose=2 "$APP"
+
+APP_ACTUAL="$DERIVED_DATA/app-store-app-entitlements.plist"
+EXTENSION_ACTUAL="$DERIVED_DATA/app-store-extension-entitlements.plist"
+codesign -d --entitlements :- "$APP" > "$APP_ACTUAL" 2>/dev/null
+codesign -d --entitlements :- "$EXTENSION" > "$EXTENSION_ACTUAL" 2>/dev/null
+
+assert_plist_value() {
+  local plist="$1"
+  local key="$2"
+  local expected="$3"
+  /usr/libexec/PlistBuddy -c "Print :$key" "$plist" | grep -Fx "$expected" >/dev/null
+}
+
+assert_plist_value "$APP_ACTUAL" "com.apple.security.app-sandbox" true
+assert_plist_value "$APP_ACTUAL" "com.apple.security.application-groups:0" R8HXTBY3NM.com.tcballard.sortinghat
+assert_plist_value "$APP_ACTUAL" "com.apple.security.files.bookmarks.app-scope" true
+assert_plist_value "$APP_ACTUAL" "com.apple.security.files.user-selected.read-write" true
+assert_plist_value "$APP_ACTUAL" "com.apple.security.network.client" true
+assert_plist_value "$EXTENSION_ACTUAL" "com.apple.security.app-sandbox" true
+assert_plist_value "$EXTENSION_ACTUAL" "com.apple.security.application-groups:0" R8HXTBY3NM.com.tcballard.sortinghat
+assert_plist_value "$EXTENSION_ACTUAL" "com.apple.security.files.user-selected.read-only" true
+assert_plist_value "$APP/Contents/Info.plist" ITSAppUsesNonExemptEncryption false
+
+echo "App Store structural preflight passed."
+echo "Archive: $ARCHIVE_PATH"
+echo "A submission archive still requires Apple Distribution signing and matching App Store profiles."

@@ -2,7 +2,7 @@ import Foundation
 
 public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
     public let fm: NativeFoundationModelsAnalyzer
-    public let pcc: FMAnalyzer
+    public let pcc: (any BatchFileAnalyzing)?
     public let ollama: OllamaAnalyzer?
     public let openAI: OpenAIAnalyzer?
     public let provider: ModelProvider
@@ -10,7 +10,7 @@ public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
     public let allowApplePCC: Bool
 
     public init(
-        fmExecutable: String = "/usr/bin/fm",
+        pcc: (any BatchFileAnalyzing)? = nil,
         ollamaURL: String,
         ollamaModel: String,
         openAIModel: String = "",
@@ -22,7 +22,7 @@ public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
         allowApplePCC: Bool = false
     ) {
         fm = NativeFoundationModelsAnalyzer(useCase: appleUseCase, guardrails: appleGuardrails)
-        pcc = FMAnalyzer(executable: fmExecutable, model: .pcc, useCase: appleUseCase, guardrails: appleGuardrails, pccAllowed: allowApplePCC)
+        self.pcc = pcc
         let model = ollamaModel.trimmingCharacters(in: .whitespacesAndNewlines)
         ollama = model.isEmpty ? nil : OllamaAnalyzer(baseURL: ollamaURL, model: model)
         let cloudModel = openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -78,8 +78,8 @@ public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
     private var appleIsAvailable: Bool {
         switch appleModel {
         case .system: fm.isAvailable
-        case .pcc: allowApplePCC && pcc.isAvailable
-        case .automatic: fm.isAvailable || (allowApplePCC && pcc.isAvailable)
+        case .pcc: allowApplePCC && pcc != nil
+        case .automatic: fm.isAvailable || (allowApplePCC && pcc != nil)
         }
     }
 
@@ -89,12 +89,14 @@ public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
             return try fm.analyze(file: file, rules: rules)
         case .pcc:
             guard allowApplePCC else { throw HatError.pccConsentRequired }
+            guard let pcc else { throw HatError.pccUnavailable("PCC is not available in this app build") }
             return try pcc.analyze(file: file, rules: rules)
         case .automatic:
             do {
                 return try fm.analyze(file: file, rules: rules)
             } catch {
                 guard allowApplePCC, Self.shouldEscalateToPCC(after: error) else { throw error }
+                guard let pcc else { throw error }
                 return try pcc.analyze(file: file, rules: rules)
             }
         }
@@ -106,10 +108,11 @@ public struct PreferredAnalyzer: FileAnalyzing, BatchFileAnalyzing {
             return fm.analyzeBatch(files: files, rules: rules)
         case .pcc:
             guard allowApplePCC else { return files.map { .failure(sourceID: $0.id, .pccConsentRequired) } }
+            guard let pcc else { return files.map { .failure(sourceID: $0.id, .pccUnavailable("PCC is not available in this app build")) } }
             return pcc.analyzeBatch(files: files, rules: rules)
         case .automatic:
             let local = fm.analyzeBatch(files: files, rules: rules)
-            guard allowApplePCC else { return local }
+            guard allowApplePCC, let pcc else { return local }
             let inputByID = Dictionary(uniqueKeysWithValues: files.map { ($0.id, $0) })
             let retryInputs = local.compactMap { outcome -> BatchFileInput? in
                 guard case .failure(let sourceID, let error) = outcome,
@@ -204,7 +207,7 @@ public struct OllamaAnalyzer: FileAnalyzing {
         semaphore.wait()
         let data = try result!.get()
         let envelope = try JSONDecoder().decode(ChatResponse.self, from: data)
-        return try FMAnalyzer.decode(Data(envelope.message.content.utf8))
+        return try DecisionJSONDecoder.decode(Data(envelope.message.content.utf8))
     }
 
     private struct ChatResponse: Decodable { let message: Message }

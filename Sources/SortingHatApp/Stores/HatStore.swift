@@ -23,6 +23,7 @@ final class HatStore {
     var finderLastInvocation: InboxIngressInvocation?
     var finderDeliveryConfirmed = false
     var inboxAccessState: InboxAccessState = .missing
+    var outputAccessState: InboxAccessState = .missing
     var finderQueueIssue: String?
     var legacyQuickActionInstalled = false
     var legacyQuickActionBackupURL: URL?
@@ -35,6 +36,8 @@ final class HatStore {
     private let importer = InboxImportService()
     private var finderIntakeRoot: URL?
     private var finderDrainInFlight = false
+    private var activeInboxAccessURL: URL?
+    private var activeOutputAccessURL: URL?
     @ObservationIgnored var onWatchingChanged: ((Bool) -> Void)?
 
     init() {
@@ -52,6 +55,7 @@ final class HatStore {
             inbox = Self.expandedURL(config.inbox)
             outputRoot = Self.expandedURL(config.output)
         }
+        activateConfiguredFolderAccess()
         configureFinderIntake()
         recent = ledger.load()
         refreshInbox()
@@ -87,10 +91,10 @@ final class HatStore {
             let config = try ConfigLoader.load(configURL)
             let configuredInbox = Self.expandedURL(config.inbox)
             let output = Self.expandedURL(config.output)
-            let analyzer = PreferredAnalyzer(fmExecutable: Self.fmPath(), ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
+            let analyzer = PreferredAnalyzer(ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
                                              openAIModel: config.openAIModel, openAIKey: APIKeyStore.load(), provider: config.modelProvider,
-                                             appleModel: config.appleModel, appleUseCase: config.appleUseCase,
-                                             appleGuardrails: config.appleGuardrails, allowApplePCC: config.allowApplePCC)
+                                             appleModel: config.appleModel == .pcc ? .system : config.appleModel,
+                                             appleUseCase: config.appleUseCase, appleGuardrails: config.appleGuardrails)
             let organizer = Organizer(inbox: configuredInbox, output: output, rules: config.rules, analyzer: analyzer)
             let files = try organizer.candidates()
             if files.isEmpty { if isWatching { status = "Watching the Inbox" }; return }
@@ -171,32 +175,35 @@ final class HatStore {
         let standardizedInbox = inbox.standardizedFileURL
         let standardizedOutput = output.standardizedFileURL
         try FileManager.default.createDirectory(at: standardizedInbox, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: standardizedOutput, withIntermediateDirectories: true)
 
         var config = try ConfigLoader.load(configURL)
         config.inbox = Self.portablePath(standardizedInbox)
         config.output = Self.portablePath(standardizedOutput)
 
-        if finderIntakeRoot != nil {
-            let bookmarkStore = InboxAccessBookmarkStore(root: Self.inboxAccessRoot)
-            let previousAccess = try bookmarkStore.snapshot()
-            let grant = try bookmarkStore.prepare(standardizedInbox)
-            do {
-                // Publish the new bookmark first. If config save fails, restore
-                // the prior grant; if the process crashes between the two
-                // writes, expected-path validation blocks the queue fail-closed.
-                try bookmarkStore.commit(grant)
-                try ConfigLoader.save(config, to: configURL)
-            } catch {
-                try? bookmarkStore.restore(previousAccess)
-                inboxAccessState = .invalid(error.localizedDescription)
-                throw error
-            }
-        } else {
+        let inboxBookmarkStore = InboxAccessBookmarkStore(root: Self.inboxAccessRoot)
+        let outputBookmarkStore = InboxAccessBookmarkStore(root: Self.outputAccessRoot, name: "Output")
+        let previousInboxAccess = try inboxBookmarkStore.snapshot()
+        let previousOutputAccess = try outputBookmarkStore.snapshot()
+        let inboxGrant = try inboxBookmarkStore.prepare(standardizedInbox)
+        let outputGrant = try outputBookmarkStore.prepare(standardizedOutput)
+        do {
+            // Publish both grants before config. If any write fails, restore the
+            // complete prior access pair so config and permissions cannot drift.
+            try inboxBookmarkStore.commit(inboxGrant)
+            try outputBookmarkStore.commit(outputGrant)
             try ConfigLoader.save(config, to: configURL)
+        } catch {
+            try? inboxBookmarkStore.restore(previousInboxAccess)
+            try? outputBookmarkStore.restore(previousOutputAccess)
+            inboxAccessState = .invalid(error.localizedDescription)
+            outputAccessState = .invalid(error.localizedDescription)
+            throw error
         }
 
         self.inbox = standardizedInbox
         outputRoot = standardizedOutput
+        activateConfiguredFolderAccess()
         Task { await drainFinderIntake() }
         refreshInbox()
     }
@@ -295,26 +302,26 @@ final class HatStore {
         }
     }
 
-    func loadModelSettings() throws -> (provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase, appleGuardrails: AppleGuardrails, allowApplePCC: Bool, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
+    func loadModelSettings() throws -> (provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase, appleGuardrails: AppleGuardrails, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
         let config = try ConfigLoader.load(configURL)
-        return (config.modelProvider, config.appleModel, config.appleUseCase, config.appleGuardrails, config.allowApplePCC,
+        let appModel: AppleModelSelection = config.appleModel == .pcc ? .system : config.appleModel
+        return (config.modelProvider, appModel, config.appleUseCase, config.appleGuardrails,
                 config.ollamaURL, config.ollamaModel, config.openAIModel, APIKeyStore.load())
     }
 
     func saveModelSettings(provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase,
-                           appleGuardrails: AppleGuardrails, allowApplePCC: Bool, url: String,
+                           appleGuardrails: AppleGuardrails, url: String,
                            ollamaModel: String, openAIModel: String, openAIKey: String) throws {
         guard URL(string: url) != nil else { throw HatError.invalidConfig("Ollama URL is not valid") }
-        if appleModel == .pcc, !allowApplePCC { throw HatError.pccConsentRequired }
         var config = try ConfigLoader.load(configURL)
         config.ollamaURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
         config.ollamaModel = ollamaModel.trimmingCharacters(in: .whitespacesAndNewlines)
         config.openAIModel = openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
         config.modelProvider = provider
-        config.appleModel = appleModel
+        config.appleModel = appleModel == .pcc ? .system : appleModel
         config.appleUseCase = appleUseCase
         config.appleGuardrails = appleGuardrails
-        config.allowApplePCC = allowApplePCC
+        config.allowApplePCC = false
         try APIKeyStore.save(openAIKey.trimmingCharacters(in: .whitespacesAndNewlines))
         try ConfigLoader.save(config, to: configURL)
         status = "Model Settings Updated"
@@ -487,6 +494,41 @@ final class HatStore {
         }
     }
 
+    private func activateConfiguredFolderAccess() {
+        stopConfiguredFolderAccess()
+
+        let inboxState = InboxAccessBookmarkStore(root: Self.inboxAccessRoot)
+            .resolve(expectedInbox: inbox)
+        let outputState = InboxAccessBookmarkStore(root: Self.outputAccessRoot, name: "Output")
+            .resolve(expectedInbox: outputRoot)
+
+        inboxAccessState = inboxState
+        outputAccessState = outputState
+        activeInboxAccessURL = activate(inboxState, label: "Inbox")
+        activeOutputAccessURL = activate(outputState, label: "filed output")
+    }
+
+    private func activate(_ state: InboxAccessState, label: String) -> URL? {
+        guard case .available(let url) = state else { return nil }
+        guard url.startAccessingSecurityScopedResource() else {
+            let message = "Saved \(label) permission could not be activated. Choose the folder again."
+            if label == "Inbox" {
+                inboxAccessState = .invalid(message)
+            } else {
+                outputAccessState = .invalid(message)
+            }
+            return nil
+        }
+        return url
+    }
+
+    private func stopConfiguredFolderAccess() {
+        activeInboxAccessURL?.stopAccessingSecurityScopedResource()
+        activeOutputAccessURL?.stopAccessingSecurityScopedResource()
+        activeInboxAccessURL = nil
+        activeOutputAccessURL = nil
+    }
+
     private func startIntakeCoordinator() {
         guard intakeTask == nil else { return }
         intakeTask = Task { [weak self] in
@@ -570,10 +612,6 @@ final class HatStore {
         }
     }
 
-    private static func fmPath() -> String {
-        ["/usr/bin/fm", "/usr/local/bin/fm", "/opt/homebrew/bin/fm"].first(where: FileManager.default.isExecutableFile(atPath:)) ?? "/usr/bin/fm"
-    }
-
     private static var buildNumber: String {
         Bundle.main.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as? String ?? "unknown"
     }
@@ -581,6 +619,11 @@ final class HatStore {
     private static var inboxAccessRoot: URL {
         FileManager.default.homeDirectoryForCurrentUser
             .appending(path: "Library/Application Support/SortingHat/Finder Inbox Access", directoryHint: .isDirectory)
+    }
+
+    private static var outputAccessRoot: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library/Application Support/SortingHat/Filed Output Access", directoryHint: .isDirectory)
     }
 
     private static func expandedURL(_ path: String) -> URL {
