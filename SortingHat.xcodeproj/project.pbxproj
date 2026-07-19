@@ -1,0 +1,572 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1075DF6EF3C2B7E879D45496 /* ReviewQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D732DC01AE240AE483F423D6 /* ReviewQueueView.swift */; };
+		134DFD0111902BE8DE6477C8 /* ActionRequestHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88ADD613E69FA0224084FE99 /* ActionRequestHandler.swift */; };
+		37ECE3C90C9DC861415275D9 /* RulePlanGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B2C203CFB8321153FC8503E /* RulePlanGenerator.swift */; };
+		37F835EB8CE4DB9604AB202D /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC8CEA00F91AA384944B6DC1 /* APIKeyStore.swift */; };
+		3C98729FE9B61131E860AC67 /* RulePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = E34BBCCB587929B4260D649C /* RulePlan.swift */; };
+		4613420AE1FFC54EE9B5E854 /* SortingHatFinderAdapter in Frameworks */ = {isa = PBXBuildFile; productRef = 7FA074FE3F35124A742C2767 /* SortingHatFinderAdapter */; };
+		4A9806D2E0B2AA92546EC5A6 /* HatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0EB807461CD2FBEAC90182D /* HatStore.swift */; };
+		5DDE652A6495AEDF7070DFE9 /* ActivityLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0581E19BBC86EFF7EC95D2EB /* ActivityLedger.swift */; };
+		61F1CD9A1B8610DF1CBE4FFE /* SortingHatCore in Frameworks */ = {isa = PBXBuildFile; productRef = F6EB718C6BC41BF6F4740AD2 /* SortingHatCore */; };
+		6F0C6CFB4797F5916E1B1336 /* SortingHatTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149915F7FA55267F8FBC9713 /* SortingHatTheme.swift */; };
+		7BBC5F5FB4BB269F8261358B /* SendToSortingHatAction.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 021448C65120774D985C50A3 /* SendToSortingHatAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		82E4494350ABBB746C7EEBED /* RulesEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF783C14FBCE3B3B969A8140 /* RulesEditorView.swift */; };
+		C2ABECC8A7B77D8EA2907583 /* ModelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D9589A55D599EC62EC61FB /* ModelSettingsView.swift */; };
+		CD5BCBDFE31FA826097C6016 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698A482A0EAAA4043EBF9D97 /* DashboardView.swift */; };
+		E19A1580814AC46E0FD700F1 /* SortingHatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47521A9F025FA497A89BCEA8 /* SortingHatApp.swift */; };
+		F39D70455D9C7C813E5125ED /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C24EBAF0EB6D03C27BC24A53 /* SetupView.swift */; };
+		FE3299CFCE57CC534115D018 /* SortingHatCore in Frameworks */ = {isa = PBXBuildFile; productRef = CFB4CBD66911A4EEF5239E80 /* SortingHatCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A1136088118B6AD99E97F3FE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3D94D2C32F2D0F9C4C8A137F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 409356E5960301B51B641425;
+			remoteInfo = SendToSortingHatAction;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2FF81515C530954AA8AF8C6B /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				7BBC5F5FB4BB269F8261358B /* SendToSortingHatAction.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		021448C65120774D985C50A3 /* SendToSortingHatAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SendToSortingHatAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0581E19BBC86EFF7EC95D2EB /* ActivityLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityLedger.swift; sourceTree = "<group>"; };
+		149915F7FA55267F8FBC9713 /* SortingHatTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortingHatTheme.swift; sourceTree = "<group>"; };
+		1A5E23DD9FE2BCEB3FDA3886 /* SortingHatApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SortingHatApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3B2C203CFB8321153FC8503E /* RulePlanGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulePlanGenerator.swift; sourceTree = "<group>"; };
+		44D8496DA7F3A4922495C13B /* SortingHat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SortingHat; path = .; sourceTree = SOURCE_ROOT; };
+		47521A9F025FA497A89BCEA8 /* SortingHatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortingHatApp.swift; sourceTree = "<group>"; };
+		698A482A0EAAA4043EBF9D97 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		79D9589A55D599EC62EC61FB /* ModelSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSettingsView.swift; sourceTree = "<group>"; };
+		88ADD613E69FA0224084FE99 /* ActionRequestHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionRequestHandler.swift; sourceTree = "<group>"; };
+		A0EB807461CD2FBEAC90182D /* HatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HatStore.swift; sourceTree = "<group>"; };
+		BC8CEA00F91AA384944B6DC1 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
+		C24EBAF0EB6D03C27BC24A53 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		CF783C14FBCE3B3B969A8140 /* RulesEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesEditorView.swift; sourceTree = "<group>"; };
+		D732DC01AE240AE483F423D6 /* ReviewQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewQueueView.swift; sourceTree = "<group>"; };
+		E34BBCCB587929B4260D649C /* RulePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulePlan.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		151305D292D632EF9E22215F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FE3299CFCE57CC534115D018 /* SortingHatCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8B6966A9A84EC32F658EE4B3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				61F1CD9A1B8610DF1CBE4FFE /* SortingHatCore in Frameworks */,
+				4613420AE1FFC54EE9B5E854 /* SortingHatFinderAdapter in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		127F7468AA983B9A420BB13B /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				44D8496DA7F3A4922495C13B /* SortingHat */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		2AE1F696BF6E123F10112D33 /* SendToSortingHatAction */ = {
+			isa = PBXGroup;
+			children = (
+				88ADD613E69FA0224084FE99 /* ActionRequestHandler.swift */,
+			);
+			name = SendToSortingHatAction;
+			path = Sources/SendToSortingHatAction;
+			sourceTree = "<group>";
+		};
+		44FC3D9D444D2B4D7A0D319C = {
+			isa = PBXGroup;
+			children = (
+				127F7468AA983B9A420BB13B /* Packages */,
+				2AE1F696BF6E123F10112D33 /* SendToSortingHatAction */,
+				CB2D288FF9296E0A8CAF1FB0 /* SortingHatApp */,
+				87D85109D5CB7FABD14A441C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		64F4FDFB90B9426C54FE4A7D /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				3B2C203CFB8321153FC8503E /* RulePlanGenerator.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		75C3608184E9349109F370F6 /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				0581E19BBC86EFF7EC95D2EB /* ActivityLedger.swift */,
+				BC8CEA00F91AA384944B6DC1 /* APIKeyStore.swift */,
+				A0EB807461CD2FBEAC90182D /* HatStore.swift */,
+			);
+			path = Stores;
+			sourceTree = "<group>";
+		};
+		87D85109D5CB7FABD14A441C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				021448C65120774D985C50A3 /* SendToSortingHatAction.appex */,
+				1A5E23DD9FE2BCEB3FDA3886 /* SortingHatApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8A4E8675988EC29D12ABC814 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				47521A9F025FA497A89BCEA8 /* SortingHatApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		CB2D288FF9296E0A8CAF1FB0 /* SortingHatApp */ = {
+			isa = PBXGroup;
+			children = (
+				8A4E8675988EC29D12ABC814 /* App */,
+				F4A0A0BF472449C9C0CC2E45 /* Models */,
+				64F4FDFB90B9426C54FE4A7D /* Services */,
+				75C3608184E9349109F370F6 /* Stores */,
+				FC45049DD3E289D86DC0E142 /* Views */,
+			);
+			name = SortingHatApp;
+			path = Sources/SortingHatApp;
+			sourceTree = "<group>";
+		};
+		F4A0A0BF472449C9C0CC2E45 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				E34BBCCB587929B4260D649C /* RulePlan.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		FC45049DD3E289D86DC0E142 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				698A482A0EAAA4043EBF9D97 /* DashboardView.swift */,
+				79D9589A55D599EC62EC61FB /* ModelSettingsView.swift */,
+				D732DC01AE240AE483F423D6 /* ReviewQueueView.swift */,
+				CF783C14FBCE3B3B969A8140 /* RulesEditorView.swift */,
+				C24EBAF0EB6D03C27BC24A53 /* SetupView.swift */,
+				149915F7FA55267F8FBC9713 /* SortingHatTheme.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		106685E210E6813175EC5EB8 /* SortingHatApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1C7C9BEE6AC9FEBE028BD5B1 /* Build configuration list for PBXNativeTarget "SortingHatApp" */;
+			buildPhases = (
+				043F6436CCD20C426BD8BE0D /* Sources */,
+				151305D292D632EF9E22215F /* Frameworks */,
+				2FF81515C530954AA8AF8C6B /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				560D562EF5FB292AA1EF0A27 /* PBXTargetDependency */,
+			);
+			name = SortingHatApp;
+			packageProductDependencies = (
+				CFB4CBD66911A4EEF5239E80 /* SortingHatCore */,
+			);
+			productName = SortingHatApp;
+			productReference = 1A5E23DD9FE2BCEB3FDA3886 /* SortingHatApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		409356E5960301B51B641425 /* SendToSortingHatAction */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0643962556F7792172197E17 /* Build configuration list for PBXNativeTarget "SendToSortingHatAction" */;
+			buildPhases = (
+				4EC47CFC4790DFE2A7E331F1 /* Sources */,
+				8B6966A9A84EC32F658EE4B3 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SendToSortingHatAction;
+			packageProductDependencies = (
+				F6EB718C6BC41BF6F4740AD2 /* SortingHatCore */,
+				7FA074FE3F35124A742C2767 /* SortingHatFinderAdapter */,
+			);
+			productName = SendToSortingHatAction;
+			productReference = 021448C65120774D985C50A3 /* SendToSortingHatAction.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3D94D2C32F2D0F9C4C8A137F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					106685E210E6813175EC5EB8 = {
+						DevelopmentTeam = R8HXTBY3NM;
+						ProvisioningStyle = Automatic;
+					};
+					409356E5960301B51B641425 = {
+						DevelopmentTeam = R8HXTBY3NM;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 4602B212D46D62438061819D /* Build configuration list for PBXProject "SortingHat" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 44FC3D9D444D2B4D7A0D319C;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				765EDA14D144D7D2E0971183 /* XCLocalSwiftPackageReference "." */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				409356E5960301B51B641425 /* SendToSortingHatAction */,
+				106685E210E6813175EC5EB8 /* SortingHatApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		043F6436CCD20C426BD8BE0D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				37F835EB8CE4DB9604AB202D /* APIKeyStore.swift in Sources */,
+				5DDE652A6495AEDF7070DFE9 /* ActivityLedger.swift in Sources */,
+				CD5BCBDFE31FA826097C6016 /* DashboardView.swift in Sources */,
+				4A9806D2E0B2AA92546EC5A6 /* HatStore.swift in Sources */,
+				C2ABECC8A7B77D8EA2907583 /* ModelSettingsView.swift in Sources */,
+				1075DF6EF3C2B7E879D45496 /* ReviewQueueView.swift in Sources */,
+				3C98729FE9B61131E860AC67 /* RulePlan.swift in Sources */,
+				37ECE3C90C9DC861415275D9 /* RulePlanGenerator.swift in Sources */,
+				82E4494350ABBB746C7EEBED /* RulesEditorView.swift in Sources */,
+				F39D70455D9C7C813E5125ED /* SetupView.swift in Sources */,
+				E19A1580814AC46E0FD700F1 /* SortingHatApp.swift in Sources */,
+				6F0C6CFB4797F5916E1B1336 /* SortingHatTheme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4EC47CFC4790DFE2A7E331F1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				134DFD0111902BE8DE6477C8 /* ActionRequestHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		560D562EF5FB292AA1EF0A27 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 409356E5960301B51B641425 /* SendToSortingHatAction */;
+			targetProxy = A1136088118B6AD99E97F3FE /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2505882B3D577106A5B4592E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = R8HXTBY3NM;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		6DC971CA1048E9F550FC314B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = R8HXTBY3NM;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		72DA2D57A4508BBD7B32C929 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Configuration/SortingHatApp.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "Configuration/SortingHatApp-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.tcballard.sortinghat;
+				PRODUCT_NAME = "Sorting Hat";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		735B2C373D56B38E46C4DED9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Configuration/SortingHatApp.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "Configuration/SortingHatApp-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.tcballard.sortinghat;
+				PRODUCT_NAME = "Sorting Hat";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		84759DED9F7479989BFA11BD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Configuration/SendToSortingHatAction.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "Configuration/SendToSortingHatAction-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tcballard.sortinghat.finder-action";
+				PRODUCT_MODULE_NAME = SendToSortingHatAction;
+				PRODUCT_NAME = "Send to Sorting Hat";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		F743A534800F38A613B8ADA4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Configuration/SendToSortingHatAction.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "Configuration/SendToSortingHatAction-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tcballard.sortinghat.finder-action";
+				PRODUCT_MODULE_NAME = SendToSortingHatAction;
+				PRODUCT_NAME = "Send to Sorting Hat";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0643962556F7792172197E17 /* Build configuration list for PBXNativeTarget "SendToSortingHatAction" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F743A534800F38A613B8ADA4 /* Debug */,
+				84759DED9F7479989BFA11BD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1C7C9BEE6AC9FEBE028BD5B1 /* Build configuration list for PBXNativeTarget "SortingHatApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				735B2C373D56B38E46C4DED9 /* Debug */,
+				72DA2D57A4508BBD7B32C929 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4602B212D46D62438061819D /* Build configuration list for PBXProject "SortingHat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6DC971CA1048E9F550FC314B /* Debug */,
+				2505882B3D577106A5B4592E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		765EDA14D144D7D2E0971183 /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		7FA074FE3F35124A742C2767 /* SortingHatFinderAdapter */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SortingHatFinderAdapter;
+		};
+		CFB4CBD66911A4EEF5239E80 /* SortingHatCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SortingHatCore;
+		};
+		F6EB718C6BC41BF6F4740AD2 /* SortingHatCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SortingHatCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 3D94D2C32F2D0F9C4C8A137F /* Project object */;
+}

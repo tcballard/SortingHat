@@ -16,6 +16,7 @@
 - macOS 14 or later for the menu-bar app
 - macOS 27 plus Apple Intelligence for Apple's built-in `fm` model, or [Ollama](https://ollama.com/) with a local model on earlier macOS versions
 - Swift 6.2+ to build from source
+- XcodeGen 2.44.1 to regenerate the checked-in native app project
 
 ## Try it
 
@@ -36,6 +37,33 @@ Build and open the native companion with:
 ```sh
 ./script/build_and_run.sh
 ```
+
+### Finder Quick Action
+
+Signed builds include a first-party **Send to Sorting Hat** Finder Quick
+Action. Select files in Finder, then choose **Quick Actions → Send to Sorting
+Hat**. This is copy-only intake: originals stay exactly where they are while
+the extension stages durable copies in Sorting Hat's App Group queue. Running
+apps normally drain that queue within a second; paused apps still import into
+the Inbox but do not sort; closed apps import the staged files on next launch.
+One invocation accepts up to 256 files and loads File Provider items
+sequentially. The Finder transport has a 256 MB per-file limit, a 1 GB
+selection limit, and a 25-second request deadline; anything left unqueued is
+named explicitly as a partial failure and can still be added from inside
+Sorting Hat.
+
+Enable the action in **System Settings → General → Login Items & Extensions →
+Finder**. macOS offers no reliable public API for checking whether the action
+is enabled, so confirm the installed build by invoking it from Finder's
+right-click **Quick Actions** menu. Finder can cache extension availability;
+if the newly enabled action is missing, relaunch Finder once before diagnosing
+registration. Older Sorting Hat installs may also have an Automator action
+with the same name that masks the native item. **Sorting Hat Settings →
+Finder** provides a reversible migration path that preserves the workflow as a
+backup until the native delivery is verified. Integration health, Inbox permission
+repair, queued copies, failures, and **Retry** or **Remove** recovery actions
+are available under **Sorting Hat Settings → Finder**. See the [native Finder
+Quick Action architecture and migration notes](docs/finder-quick-action.md).
 
 It watches automatically, shows recent filing activity, opens the Inbox and rules file, can pause or sort immediately, and uses macOS's native launch-at-login service. The dashboard appears at launch and the graduation-cap menu remains available for quick actions.
 
@@ -109,6 +137,7 @@ Bounded tool-calling candidates are also evaluated there under a documented thre
 
 ```sh
 swift test
+./script/generate_xcode_project.sh
 ```
 
 Inference is behind `FileAnalyzing`, so filesystem behavior and safety can be tested without a model. Provider selection prefers Apple `fm` when available and otherwise uses the configured local Ollama endpoint.

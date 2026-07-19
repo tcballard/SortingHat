@@ -10,4 +10,58 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
-      - run: swift test
+      - name: Install pinned XcodeGen
+        run: |
+          archive="$RUNNER_TEMP/xcodegen-2.44.1.zip"
+          install_root="$RUNNER_TEMP/xcodegen-2.44.1"
+          bin="$install_root/xcodegen/bin"
+          curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip" -o "$archive"
+          echo "a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73  $archive" | shasum -a 256 -c -
+          ditto -x -k "$archive" "$install_root"
+          test -x "$bin/xcodegen"
+          "$bin/xcodegen" --version | grep -Fx "Version: 2.44.1"
+          echo "$bin" >> "$GITHUB_PATH"
+      - name: Verify generated Xcode project and Info plists are current
+        run: |
+          ./script/generate_xcode_project.sh
+          git diff --exit-code -- \
+            SortingHat.xcodeproj \
+            Configuration/SortingHatApp-Info.plist \
+            Configuration/SendToSortingHatAction-Info.plist
+      - name: Run full Swift test suite
+        run: swift test
+      - name: Package ad-hoc Debug app with embedded Finder Action
+        env:
+          BUILD_CONFIGURATION: Debug
+          SORTING_HAT_DERIVED_DATA: ${{ runner.temp }}/SortingHatDerivedData
+        run: ./script/build_and_run.sh package
+      - name: Verify packaged Finder Action contract
+        run: |
+          app="dist/Sorting Hat.app"
+          extension="$app/Contents/PlugIns/Send to Sorting Hat.appex"
+          app_info="$app/Contents/Info.plist"
+          extension_info="$extension/Contents/Info.plist"
+          app_entitlements="$RUNNER_TEMP/app-entitlements.plist"
+          extension_entitlements="$RUNNER_TEMP/extension-entitlements.plist"
+
+          test -d "$app"
+          test -d "$extension"
+          codesign --verify --strict --deep --verbose=2 "$extension"
+          codesign --verify --strict --deep --verbose=2 "$app"
+
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_info" | grep -Fx com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$extension_info" | grep -Fx com.tcballard.sortinghat.finder-action
+
+          codesign -d --entitlements :- "$app" > "$app_entitlements" 2>/dev/null
+          codesign -d --entitlements :- "$extension" > "$extension_entitlements" 2>/dev/null
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$app_entitlements" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$extension_entitlements" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.app-sandbox" "$extension_entitlements" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :com.apple.security.files.user-selected.read-only" "$extension_entitlements" | grep -Fx true
+
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$extension_info" | grep -Fx com.apple.services
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$extension_info" | grep -Fx SendToSortingHatAction.ActionRequestHandler
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceFinderPreviewLabel" "$extension_info" | grep -Fx "Send to Sorting Hat"
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeEditor
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceAllowsFinderPreviewItem" "$extension_info" | grep -Fx true
+          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule" "$extension_info" | grep -Fx 'SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == $extensionItem.attachments.@count).@count == 1'
