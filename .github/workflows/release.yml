@@ -15,10 +15,14 @@ jobs:
       - name: Install pinned XcodeGen
         run: |
           archive="$RUNNER_TEMP/xcodegen-2.44.1.zip"
+          install_root="$RUNNER_TEMP/xcodegen-2.44.1"
+          bin="$install_root/xcodegen/bin"
           curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip" -o "$archive"
           echo "a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73  $archive" | shasum -a 256 -c -
-          ditto -x -k "$archive" "$RUNNER_TEMP/xcodegen"
-          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+          ditto -x -k "$archive" "$install_root"
+          test -x "$bin/xcodegen"
+          "$bin/xcodegen" --version | grep -Fx "Version: 2.44.1"
+          echo "$bin" >> "$GITHUB_PATH"
       - name: Verify generated Xcode project and Info plists are current
         run: |
           ./script/generate_xcode_project.sh
