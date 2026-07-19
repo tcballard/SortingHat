@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		07FFEE04A6DF0BCCA1222E6E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D4A766D04A9129702226E922 /* Assets.xcassets */; };
 		1075DF6EF3C2B7E879D45496 /* ReviewQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D732DC01AE240AE483F423D6 /* ReviewQueueView.swift */; };
 		134DFD0111902BE8DE6477C8 /* ActionRequestHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88ADD613E69FA0224084FE99 /* ActionRequestHandler.swift */; };
 		37ECE3C90C9DC861415275D9 /* RulePlanGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B2C203CFB8321153FC8503E /* RulePlanGenerator.swift */; };
@@ -67,6 +68,7 @@
 		BC8CEA00F91AA384944B6DC1 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
 		C24EBAF0EB6D03C27BC24A53 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
 		CF783C14FBCE3B3B969A8140 /* RulesEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesEditorView.swift; sourceTree = "<group>"; };
+		D4A766D04A9129702226E922 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D732DC01AE240AE483F423D6 /* ReviewQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewQueueView.swift; sourceTree = "<group>"; };
 		E34BBCCB587929B4260D649C /* RulePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulePlan.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -166,6 +168,7 @@
 		CB2D288FF9296E0A8CAF1FB0 /* SortingHatApp */ = {
 			isa = PBXGroup;
 			children = (
+				D4A766D04A9129702226E922 /* Assets.xcassets */,
 				8A4E8675988EC29D12ABC814 /* App */,
 				F4A0A0BF472449C9C0CC2E45 /* Models */,
 				64F4FDFB90B9426C54FE4A7D /* Services */,
@@ -289,6 +292,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				07FFEE04A6DF0BCCA1222E6E /* Assets.xcassets in Resources */,
 				EF7F78159BA7E53BB24B0C23 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

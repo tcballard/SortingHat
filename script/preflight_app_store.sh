@@ -10,6 +10,9 @@ APP_ENTITLEMENTS="$ROOT_DIR/Configuration/SortingHatApp-AppStore.entitlements"
 EXTENSION_ENTITLEMENTS="$ROOT_DIR/Configuration/SendToSortingHatAction.entitlements"
 APP_BINARY="$APP/Contents/MacOS/Sorting Hat"
 PRIVACY_MANIFEST="$APP/Contents/Resources/PrivacyInfo.xcprivacy"
+APP_ICON="$APP/Contents/Resources/AppIcon.icns"
+ASSET_CATALOG="$APP/Contents/Resources/Assets.car"
+APP_ICON_SOURCE="$ROOT_DIR/Sources/SortingHatApp/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png"
 
 rm -rf "$DERIVED_DATA" "$ARCHIVE_PATH"
 xcodebuild \
@@ -27,8 +30,33 @@ test -d "$APP"
 test -d "$EXTENSION"
 test -x "$APP_BINARY"
 test -f "$PRIVACY_MANIFEST"
+test -f "$APP_ICON"
+test -f "$ASSET_CATALOG"
+test -f "$APP_ICON_SOURCE"
 test "$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -type d -name '*.app' | wc -l | tr -d ' ')" = "1"
 plutil -lint "$APP/Contents/Info.plist" "$EXTENSION/Contents/Info.plist" "$PRIVACY_MANIFEST" >/dev/null
+
+test "$(sips -g pixelWidth "$APP_ICON_SOURCE" 2>/dev/null | awk '/pixelWidth:/ { print $2 }')" = "1024"
+test "$(sips -g pixelHeight "$APP_ICON_SOURCE" 2>/dev/null | awk '/pixelHeight:/ { print $2 }')" = "1024"
+
+ASSET_INFO="$DERIVED_DATA/app-store-assets.json"
+xcrun assetutil --info "$ASSET_CATALOG" > "$ASSET_INFO"
+/usr/bin/python3 - "$ASSET_INFO" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    renditions = json.load(handle)
+
+if not any(
+    rendition.get("Name") == "AppIcon"
+    and rendition.get("PixelWidth") == 1024
+    and rendition.get("PixelHeight") == 1024
+    and rendition.get("Scale") == 2
+    for rendition in renditions
+):
+    raise SystemExit("Compiled asset catalog is missing the 512pt @2x AppIcon rendition.")
+PY
 
 if strings "$APP_BINARY" | grep -Fq "/usr/bin/fm"; then
   echo "App Store binary unexpectedly contains the legacy fm executable path." >&2
