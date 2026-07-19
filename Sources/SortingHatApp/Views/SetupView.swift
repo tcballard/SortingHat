@@ -148,7 +148,7 @@ struct SetupView: View {
         let request = intent
         Task {
             do {
-                let generated = try await Task.detached { try RulePlanGenerator().generate(from: request) }.value
+                let generated = try await RulePlanGenerator().generate(from: request)
                 plan = generated
             } catch { errorMessage = error.localizedDescription }
             isGenerating = false

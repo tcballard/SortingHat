@@ -1,148 +1,107 @@
 import Foundation
+import FoundationModels
 
 struct RulePlanGenerator: Sendable {
-    let executable: String
-
-    init(executable: String = "/usr/bin/fm") { self.executable = executable }
-
-    func generate(from description: String) throws -> RulePlan {
+    func generate(from description: String) async throws -> RulePlan {
         let request = description.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !request.isEmpty else { throw RulePlanError.invalid("Describe how you want files organised.") }
-        guard FileManager.default.isExecutableFile(atPath: executable) else {
+        guard #available(macOS 26.0, *) else {
             throw RulePlanError.unavailable("Apple Foundation Models are unavailable. You can still edit rules manually.")
         }
-
-        let schemaURL = FileManager.default.temporaryDirectory.appending(path: "sortinghat-rule-plan-\(UUID().uuidString).json")
-        try Self.schema.write(to: schemaURL, options: .atomic)
-        defer { try? FileManager.default.removeItem(at: schemaURL) }
-
-        var response = try run(request: request, schemaURL: schemaURL)
-        for retry in 0..<2 where response.isTransientFailure {
-            Thread.sleep(forTimeInterval: 0.6 * Double(retry + 1))
-            response = try run(request: request, schemaURL: schemaURL)
-        }
-        guard response.status == 0 else {
-            if response.detail.localizedCaseInsensitiveContains("invalid schema") {
-                throw RulePlanError.unavailable("The hat couldn’t prepare the rule builder. Please update Sorting Hat and try again.")
-            }
-            if response.isTransientFailure {
-                throw RulePlanError.unavailable("Apple Intelligence is temporarily unavailable. Wait a moment, then build the rules again. Your existing rules are unchanged.")
-            }
-            if response.detail.localizedCaseInsensitiveContains("SensitiveContentAnalysisML") {
-                throw RulePlanError.unavailable("Apple Intelligence couldn’t process that wording. Try a shorter description of the files and destination. Your existing rules are unchanged.")
-            }
-            throw RulePlanError.unavailable(response.detail.isEmpty
-                ? "The hat couldn’t build that plan. Try describing it another way."
-                : response.detail)
-        }
-        var plan = try JSONDecoder().decode(RulePlan.self, from: response.output)
-        plan.routes.removeAll { route in
-            let folder = route.folderTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
-            return folder.caseInsensitiveCompare("Inbox") == .orderedSame
-                || folder.caseInsensitiveCompare("Sorted") == .orderedSame
-                || folder.lowercased().hasPrefix("sorted/")
-        }
-        try RulePlanValidator.validate(plan)
-        return plan
+        return try await generateNative(from: request)
     }
 
-    private func run(request: String, schemaURL: URL) throws -> Response {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = [
-            "respond", "--model", "system",
-            "--instructions", Self.instructions,
-            "--guardrails", "permissive-content-transformations",
-            "--schema", schemaURL.path,
-            "--no-stream", "--greedy",
-            request,
-        ]
-        let output = Pipe()
-        let errors = Pipe()
-        process.standardOutput = output
-        process.standardError = errors
-        try process.run()
-        process.waitUntilExit()
-        return Response(
-            status: process.terminationStatus,
-            output: output.fileHandleForReading.readDataToEndOfFile(),
-            error: errors.fileHandleForReading.readDataToEndOfFile()
+    @available(macOS 26.0, *)
+    private func generateNative(from request: String) async throws -> RulePlan {
+        let model = SystemLanguageModel(
+            useCase: .general,
+            guardrails: .permissiveContentTransformations
+        )
+        guard model.isAvailable else {
+            throw RulePlanError.unavailable("Apple Intelligence is unavailable. Check Model Settings, or edit the rules manually.")
+        }
+
+        var lastError: Error?
+        for attempt in 0..<3 {
+            do {
+                let session = LanguageModelSession(model: model, instructions: Self.instructions)
+                let response = try await session.respond(
+                    to: request,
+                    schema: Self.schema,
+                    options: GenerationOptions(sampling: .greedy)
+                )
+                var plan = try Self.plan(from: response.content)
+                plan.routes.removeAll { route in
+                    let folder = route.folderTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return folder.caseInsensitiveCompare("Inbox") == .orderedSame
+                        || folder.caseInsensitiveCompare("Sorted") == .orderedSame
+                        || folder.lowercased().hasPrefix("sorted/")
+                }
+                try RulePlanValidator.validate(plan)
+                return plan
+            } catch let error as RulePlanError {
+                throw error
+            } catch {
+                lastError = error
+                if attempt < 2 {
+                    try? await Task.sleep(for: .milliseconds(600 * (attempt + 1)))
+                }
+            }
+        }
+
+        let detail = lastError?.localizedDescription ?? "The model did not return a filing plan."
+        throw RulePlanError.unavailable(
+            "The hat couldn’t build that plan. Try a shorter description and build it again. Your existing rules are unchanged. (\(detail))"
         )
     }
 
-    private struct Response {
-        let status: Int32
-        let output: Data
-        let error: Data
-
-        var detail: String {
-            let value = String(data: error, encoding: .utf8) ?? ""
-            return RulePlanGenerator.strippingTerminalFormatting(from: value)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+    @available(macOS 26.0, *)
+    private static func plan(from content: GeneratedContent) throws -> RulePlan {
+        let routeContent = try content.value([GeneratedContent].self, forProperty: "routes")
+        let routes = try routeContent.map { route in
+            RoutePlan(
+                name: try route.value(String.self, forProperty: "name"),
+                fileKinds: try route.value(String.self, forProperty: "fileKinds"),
+                folderTemplate: try route.value(String.self, forProperty: "folderTemplate"),
+                organisation: try route.value(String.self, forProperty: "organisation"),
+                tags: try route.value([String].self, forProperty: "tags")
+            )
         }
-
-        var isTransientFailure: Bool {
-            detail.localizedCaseInsensitiveContains("LanguageModelError error -1")
-                || detail.localizedCaseInsensitiveContains("ModelManagerError error 1008")
-        }
+        return RulePlan(
+            summary: try content.value(String.self, forProperty: "summary"),
+            renamePolicy: try content.value(String.self, forProperty: "renamePolicy"),
+            routes: routes,
+            fallback: try content.value(String.self, forProperty: "fallback")
+        )
     }
+
+    @available(macOS 26.0, *)
+    private static let schema: GenerationSchema = {
+        let route = DynamicGenerationSchema(
+            name: "SortingHatRoute",
+            description: "One requested file group and its meaningful destination",
+            properties: [
+                .init(name: "name", description: "A short human-readable route name", schema: .init(type: String.self)),
+                .init(name: "fileKinds", description: "The files this route should match", schema: .init(type: String.self)),
+                .init(name: "folderTemplate", description: "A safe relative destination folder; placeholders such as {project} and {year} are allowed", schema: .init(type: String.self)),
+                .init(name: "organisation", description: "How matching files should be grouped inside the destination", schema: .init(type: String.self)),
+                .init(name: "tags", description: "A short list of useful Finder tags", schema: .init(arrayOf: .init(type: String.self), maximumElements: 8)),
+            ]
+        )
+        let root = DynamicGenerationSchema(
+            name: "SortingHatRulePlan",
+            description: "A safe editable filing plan",
+            properties: [
+                .init(name: "summary", description: "A short plain-language summary", schema: .init(type: String.self)),
+                .init(name: "renamePolicy", description: "A concise rule for descriptive filenames that preserve extensions", schema: .init(type: String.self)),
+                .init(name: "routes", description: "The specific destinations requested by the person", schema: .init(arrayOf: .init(referenceTo: "SortingHatRoute"), minimumElements: 1, maximumElements: 12)),
+                .init(name: "fallback", description: "A rule that leaves uncertain files in the Inbox for review", schema: .init(type: String.self)),
+            ]
+        )
+        return try! GenerationSchema(root: root, dependencies: [route])
+    }()
 
     private static let instructions = """
     Turn the person's filing preferences into a concise, safe Sorting Hat plan. Every route needs a human-readable name, the kinds of files it matches, a relative destination folder template, an organisation description, and useful Finder tags. Use placeholders such as {project}, {client}, {year}, or {month} when the destination depends on file contents or metadata. Never invent concrete project, client, merchant, or category names. Never output absolute paths, tilde paths, or dot/dot-dot components. Include a short descriptive renaming policy. The fallback must leave uncertain files in the Inbox for review. Do not use a generic Sorted folder.
     """
-
-    private static let schema = Data(#"""
-    {
-      "title": "SortingHatRulePlan",
-      "$defs": {
-        "SortingHatRoute": {
-          "additionalProperties": false,
-          "type": "object",
-          "title": "SortingHatRoute",
-          "properties": {
-            "name": { "description": "A short name for this route", "type": "string" },
-            "fileKinds": { "description": "The files this route should match", "type": "string" },
-            "folderTemplate": { "description": "A safe relative destination folder without a leading slash", "type": "string" },
-            "organisation": { "description": "How files should be grouped inside the destination", "type": "string" },
-            "tags": { "description": "Useful Finder tags", "type": "array", "items": { "type": "string" } }
-          },
-          "required": ["name", "fileKinds", "folderTemplate", "organisation", "tags"],
-          "x-order": ["name", "fileKinds", "folderTemplate", "organisation", "tags"]
-        }
-      },
-      "type": "object",
-      "x-order": ["summary", "renamePolicy", "routes", "fallback"],
-      "properties": {
-        "summary": {
-          "description": "A short plain-language summary of the filing plan",
-          "type": "string"
-        },
-        "renamePolicy": {
-          "description": "A concise rule for producing descriptive filenames while preserving file extensions",
-          "type": "string"
-        },
-        "routes": {
-          "description": "The specific file groups and relative folders the person requested",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/SortingHatRoute"
-          }
-        },
-        "fallback": {
-          "description": "A rule that leaves uncertain files in the Inbox for review",
-          "type": "string"
-        }
-      },
-      "required": ["summary", "renamePolicy", "routes", "fallback"],
-      "additionalProperties": false
-    }
-    """#.utf8)
-
-    private static func strippingTerminalFormatting(from value: String) -> String {
-        value.replacingOccurrences(
-            of: #"\u001B\[[0-9;:]*[A-Za-z]"#,
-            with: "",
-            options: .regularExpression
-        )
-    }
 }

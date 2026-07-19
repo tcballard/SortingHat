@@ -12,7 +12,7 @@ That demo is intentionally compact and excellent at teaching the platform primit
 
 | Capability | WWDC26 session | Sorting Hat |
 | --- | --- | --- |
-| Apple Foundation Models | `fm` CLI and Python SDK | Swift app, `fm` CLI integration, and Python evaluation harness |
+| Apple Foundation Models | `fm` CLI and Python SDK | Native Swift framework in the app, plus CLI/Python evaluation tooling |
 | Input | A filename list in a one-off script | Watched Inbox with text extraction, PDF handling, and local Vision OCR |
 | Routing | Draft or final | Ordered plain-language rules with generated destination directories |
 | File action | Copy finals and move drafts | Rename, move, create folders, and apply Finder tags |
@@ -32,13 +32,19 @@ Inbox -> settle -> extract/OCR -> batch or image analysis -> resolve/validate
 
 The language model proposes a decision; it never mutates the filesystem. `Organizer` owns file changes after validating the destination, filename, extension, identity, and collision behavior. The native app is the single user entry point, while the Swift CLI and Python project remain useful for automation and measurement.
 
-Images use the multimodal `fm` path. Searchable documents prefer embedded text; scanned PDFs and images use local Vision OCR. Compatible non-image files are grouped into bounded batches. A deterministic test proves that eight eligible files use one `fm respond` invocation, while malformed or incomplete batch decisions are rejected item by item.
+The shipping app now uses the in-process Foundation Models framework rather than launching `fm`. Searchable documents prefer embedded text; scanned PDFs and images use local Vision OCR before inference. Each file gets an isolated guided-generation request and independently validated decision. The CLI adapter remains only for PCC research until the macOS 27 native PCC API can be built and validated with Xcode 27.
 
 ## Reproducible evaluation
 
 The corpus is deliberately private and lives outside the repository. The checked-in evaluator, policy, tests, and synthetic manifest contract are public. This avoids publishing personal documents or copyrighted test files while keeping the method repeatable with an equivalent corpus.
 
-The Swift live evaluator is the product-quality authority. It executes the same PDF/text/Vision extraction, routing policy, extension handling, validator, and manual-review decision the app uses, but never calls `Organizer.apply`.
+The Swift live evaluator is the product-quality authority. It executes the same native model adapter, PDF/text/Vision extraction, routing policy, extension handling, validator, and manual-review decision the app uses, but never calls `Organizer.apply`.
+
+The published Issue #23 measurements below describe the preceding `fm`-backed shipping path. The native migration uses a separate prompt version, so its result is recorded independently rather than silently inheriting the legacy score.
+
+### Native-framework migration result — 19 July 2026
+
+The native `sorting-decision-native-v2` path passed the same 12-case private-corpus gate: **83.3% exact decisions**, **12/12 folder decisions**, **10/12 filename checks**, **12/12 tag checks**, **0 generation failures**, **0 schema failures**, **0 unsafe/invalid decisions**, and the expected **2 abstentions**. Average pre-validation decision latency was **11,074.9 ms**. This is the current shipping-path result; it does not replace or average together with the legacy prompt's result.
 
 ### Environment recorded for the 18 July 2026 result
 
@@ -88,7 +94,7 @@ The complete aggregate record, rejected prompt candidates, excluded infrastructu
 - PR #22's standalone Python matrix scored 0/6, but Issue #23 found that binary documents had silently fallen back to filename-only input. That result remains useful prompt research, not shipping-path product evidence.
 - One candidate run encountered three local Vision failures before inference. It is retained as infrastructure evidence and excluded from quality scoring under the committed policy.
 - The explicitly approved PCC run still failed before inference because PCC was unavailable in this context. PCC remains inconclusive and outside the on-device gate.
-- Batching: a deterministic process test verifies 8 compatible files use 1 `fm respond` process instead of 8. This is an invocation-count result, not a wall-clock throughput claim.
+- Batching: the legacy adapter's deterministic process test verifies 8 compatible files use 1 `fm respond` process instead of 8. The native shipping path currently uses isolated per-file requests because that path passed the quality gate; no native batching throughput claim is made.
 - OCR: deterministic fixtures cover successful Vision extraction, confidence filtering, scanned-PDF fallback, and safe failure. The private corpus is too small to claim a general OCR accuracy rate.
 - Tool calling: four bounded, read-only candidates were rejected by their separate predeclared quality/failure/latency gate; see [`evaluation/TOOL_RESULTS.md`](../evaluation/TOOL_RESULTS.md).
 
@@ -103,6 +109,6 @@ The complete aggregate record, rejected prompt candidates, excluded infrastructu
 
 ## Honest conclusion
 
-Sorting Hat goes substantially beyond the WWDC26 demo in product surface, safety, recovery, OCR, batching, local-first operation, and now a passing predeclared shipping-path quality gate. On the bounded 12-case corpus, routing policy v1 improved exact decisions from 66.7% to 100% without crossing the safety or recorded pre-validation latency limits.
+Sorting Hat goes substantially beyond the WWDC26 demo in product surface, safety, recovery, OCR, and local-first operation. On the bounded 12-case corpus, the native shipping path passed its predeclared gate at 83.3% with perfect folder and tag checks, no unsafe/invalid decisions, and both expected abstentions. The preceding `fm`-backed path reached 100%; the two prompt environments remain separate results rather than a universal accuracy claim.
 
 That makes “I built a better product than a WWDC26 demo” a defensible product headline: it compares a persistent, recoverable Mac app with an intentionally compact teaching demo. It does **not** mean Sorting Hat's model is universally more accurate than Apple's, nor that 12 private cases prove production reliability for every Inbox.

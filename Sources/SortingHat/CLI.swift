@@ -52,11 +52,22 @@ enum SortingHatCLI {
         let config = try ConfigLoader.load(URL(fileURLWithPath: configPath))
         let manifest = try LiveEvaluator.loadManifest(at: corpusURL)
         let model = config.appleModel == .automatic ? AppleModelSelection.system : config.appleModel
-        let analyzer = FMAnalyzer(executable: fmPath(), model: model, useCase: config.appleUseCase,
+        let analyzer: any FileAnalyzing
+        let promptVersion: String
+        if model == .system {
+            analyzer = NativeFoundationModelsAnalyzer(
+                useCase: config.appleUseCase,
+                guardrails: config.appleGuardrails
+            )
+            promptVersion = NativeFoundationModelsAnalyzer.promptVersion
+        } else {
+            analyzer = FMAnalyzer(executable: fmPath(), model: model, useCase: config.appleUseCase,
                                   guardrails: config.appleGuardrails, pccAllowed: config.allowApplePCC)
+            promptVersion = FMAnalyzer.promptVersion
+        }
         let configuration = EvaluationConfiguration(model: model.rawValue, useCase: config.appleUseCase.rawValue,
             guardrails: config.appleGuardrails.rawValue, pccAllowed: config.allowApplePCC,
-            promptVersion: FMAnalyzer.promptVersion, operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString,
+            promptVersion: promptVersion, operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString,
             routingPolicyVersion: RoutingDecisionResolver.version)
         let baseline: EvaluationArtifact?
         if let path = value(after: "--baseline", in: args) {
@@ -135,7 +146,7 @@ enum SortingHatCLI {
 
     static func printHelp() {
         print("""
-        Sorting Hat — a local-first drop folder powered by Apple's fm CLI.
+        Sorting Hat — a local-first drop folder powered by Apple's Foundation Models framework.
 
         Usage:
           sorting-hat init [--config PATH]

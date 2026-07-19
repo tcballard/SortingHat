@@ -3,6 +3,7 @@ import Dispatch
 import Foundation
 import CoreGraphics
 import CoreText
+import FoundationModels
 import Testing
 @testable import SortingHatCore
 @testable import SortingHatFinderAdapter
@@ -155,6 +156,25 @@ private func fakeFMExecutable(counter: URL) throws -> URL {
 
 @Suite(.serialized)
 struct SortingHatTests {
+    @Test @available(macOS 26.0, *)
+    func nativeFoundationModelsContentMapsToValidatedDecisionShape() throws {
+        let content = GeneratedContent(properties: [
+            "filename": "tesco-receipt.pdf",
+            "folder": "Receipts/2026",
+            "tags": ["receipt", "tesco"],
+            "reason": "The document contains a Tesco total and transaction date",
+        ])
+
+        let decision = try NativeFoundationModelsAnalyzer.decision(from: content)
+
+        #expect(decision == Decision(
+            filename: "tesco-receipt.pdf",
+            folder: "Receipts/2026",
+            tags: ["receipt", "tesco"],
+            reason: "The document contains a Tesco total and transaction date"
+        ))
+    }
+
     @Test func liveEvaluationScoresDecisionsWithoutChangingCorpus() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -738,6 +758,21 @@ struct SortingHatTests {
 
         #expect(held.folder == "")
         #expect(filed.folder == "Files/2026-07")
+    }
+
+    @Test func keepsNativeExplicitlyUnidentifiableCatchAllDecisionForReview() throws {
+        let file = URL(fileURLWithPath: "/tmp/follow-up.txt")
+        let rules = ["Put receipts in Receipts/YYYY.", "Put everything else in Files/YYYY-MM."]
+        let decision = Decision(
+            filename: "follow-up-note.txt",
+            folder: "Files/2026-07",
+            tags: ["note", "follow-up"],
+            reason: "Brief follow-up notes with no recognizable subject for other categories"
+        )
+
+        let held = try RoutingDecisionResolver.resolve(file: file, decision: decision, rules: rules)
+
+        #expect(held.folder == "")
     }
 
     @Test func rejectsUnconfiguredAndUnresolvedControlledDestinations() throws {

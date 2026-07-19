@@ -288,7 +288,7 @@ public enum LiveEvaluator {
         let total = results.count
         let correct = results.filter { $0.folderCorrect && $0.filenameCorrect && $0.tagsCorrect && !$0.unsafeOrInvalid }.count
         let failures = results.filter { $0.decision == nil && !$0.unsafeOrInvalid }.count
-        let schemaFailures = results.filter { $0.error?.contains("fm returned an invalid decision") == true }.count
+        let schemaFailures = results.filter { $0.error?.contains("returned an invalid decision") == true }.count
         let unsafe = results.filter(\.unsafeOrInvalid).count
         let denominator = Double(max(total, 1))
         return EvaluationMetrics(total: total, correct: correct, folderCorrect: results.filter(\.folderCorrect).count,

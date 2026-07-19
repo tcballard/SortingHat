@@ -8,7 +8,7 @@ Show HN: Sorting Hat – I built a better product than Apple’s WWDC26 file-sor
 
 Apple’s WWDC26 session on the new `fm` CLI included a neat shell-script demo: give the on-device model a list of filenames, separate drafts from finals, then move or copy them.
 
-I wanted the product version of that idea, so I built Sorting Hat: a native macOS menu-bar app with a watched Inbox, plain-language filing rules, automatic folder creation, descriptive renaming, Finder tags, local OCR for scans and receipts, validated batching, and a manual-review queue when the model should not be trusted.
+I wanted the product version of that idea, so I built Sorting Hat: a native macOS menu-bar app with a watched Inbox, plain-language filing rules, automatic folder creation, descriptive renaming, Finder tags, local OCR for scans and receipts, isolated validated decisions, and a manual-review queue when the model should not be trusted.
 
 The model only proposes actions. Deterministic Swift code validates paths, extensions, batch identities, and collisions before touching a file. Apple’s on-device model is the default; PCC is explicit opt-in, and Ollama can keep the fallback local.
 
