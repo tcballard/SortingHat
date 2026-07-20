@@ -1,0 +1,29 @@
+{
+  "anchor": "center",
+  "background": "#0B111A",
+  "canvas": [
+    1440,
+    900
+  ],
+  "fit": "contain",
+  "output": "launch-pack/outputs/app-store/screenshots/02-plain-language-rules.jpg",
+  "output_bytes": 69661,
+  "output_sha256": "ad9b378fa23bbbd7ecf58a7fd179fa860cafd7cf2c3c3af21ade9fbcd61f846e",
+  "placement": [
+    0,
+    58
+  ],
+  "proportional": true,
+  "scale": 1.022001419446416,
+  "scaled_size": [
+    1440,
+    785
+  ],
+  "source": "/private/tmp/SortingHat-rules-source.jpeg",
+  "source_sha256": "a48ee05801c23a6b7921e5949fb4f683245d94f594871da1ba68627d5d42d24c",
+  "source_size": [
+    1409,
+    768
+  ],
+  "source_unchanged": true
+}

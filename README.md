@@ -9,7 +9,7 @@
 [See exactly how the product extends Apple’s WWDC26 file-sorting demo, including the passing shipping-path benchmark and its limitations.](docs/wwdc26-comparison.md)
 
 > [!WARNING]
-> The current `v0.1.0` build is an experimental pre-release. Its app bundle is ad-hoc signed, not signed with an Apple Developer ID, and it is not notarized. Gatekeeper may block the first launch; managed Macs may prohibit it entirely. Homebrew installation confirms the archive and cask are valid, but does not bypass these macOS security checks.
+> The downloadable GitHub `v0.1.0` artifact is an experimental pre-release. Its app bundle is ad-hoc signed, not signed with an Apple Developer ID, and it is not notarized. Gatekeeper may block the first launch; managed Macs may prohibit it entirely. Homebrew installation confirms the archive and cask are valid, but does not bypass these macOS security checks. This warning does not describe the separately signed Mac App Store build.
 
 ## Requirements
 
@@ -30,7 +30,7 @@ mkdir -p ~/SortingHat/Inbox
 
 ## Menu-bar app
 
-The packaged app is currently intended for testing, not polished public distribution. If Gatekeeper blocks it, macOS may offer **System Settings → Privacy & Security → Open Anyway**. Only override Gatekeeper if you understand and accept the risk; the Finder Quick Action may produce additional trust prompts.
+The local and GitHub-packaged app is currently intended for testing. If Gatekeeper blocks the GitHub build, macOS may offer **System Settings → Privacy & Security → Open Anyway**. Only override Gatekeeper if you understand and accept the risk; the Finder Quick Action may produce additional trust prompts. The separately signed Mac App Store build follows Apple's Store trust and sandbox path.
 
 Build and open the native companion with:
 
@@ -89,7 +89,7 @@ rules:
   - Put everything else in Files/YYYY-MM and add one useful topic tag.
 ```
 
-Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Apple can use the local `system` model, Private Cloud Compute (`pcc`), or an automatic policy. Automatic always tries on-device first and retries PCC only after an availability or generation failure. Content extraction, unsafe paths, and invalid filing decisions never trigger cloud escalation. PCC is disabled until `allow_apple_pcc: true` is explicitly saved; enabling it means file context may be sent to Apple's Private Cloud Compute service. Overall provider selection then falls back to configured Ollama and OpenAI providers when Apple is unavailable.
+Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Apple's shipping app integration uses the on-device Foundation Model; automatic provider selection can fall back to configured Ollama and OpenAI providers when Apple is unavailable. Content extraction, unsafe paths, and invalid filing decisions never trigger cloud escalation. Private Cloud Compute remains research-only and is not exposed by the shipping app.
 
 For the on-device system model, `apple_use_case: content-tagging` opts into the Foundation Models framework's content-tagging specialization. `apple_guardrails: permissive-content-transformations` relaxes the system model's content-transformation guardrails for filing material that the default policy refuses; use the default unless your rules require that behavior. These system-only options are omitted from PCC requests. Apple requests use in-process guided generation and greedy sampling. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`.
 
@@ -153,4 +153,4 @@ The Foundation Models decision path can be shared by a future iPhone or iPad cli
 
 Release archives are currently ad-hoc signed and published as GitHub pre-releases. Before treating Sorting Hat as production-ready, releases must be signed with a **Developer ID Application** certificate using the hardened runtime, submitted to Apple for notarization, stapled, and validated with Gatekeeper. See [Apple's Gatekeeper guidance](https://support.apple.com/en-gb/102445) and [Apple's notarization documentation](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
 
-Developer ID/Homebrew and Mac App Store are separate tracked channels. The Store build has its own sandboxed configuration and structural preflight; it is not upload-ready until the matching Apple Distribution identity, profiles, App Store Connect record, metadata, and installed-build verification exist. See the [distribution guide](docs/distribution.md), [Issue #24](https://github.com/tcballard/SortingHat/issues/24), and [Issue #29](https://github.com/tcballard/SortingHat/issues/29).
+Developer ID/Homebrew and Mac App Store are separate tracked channels. App Store Connect build **0.1.0 (1)** has been uploaded and is selectable; product-page metadata, privacy declarations, review submission, and installed-build verification remain. The GitHub pre-release is still an ad-hoc-signed experimental artifact and is not equivalent to the Store build. See the [distribution guide](docs/distribution.md), [Issue #24](https://github.com/tcballard/SortingHat/issues/24), and [Issue #29](https://github.com/tcballard/SortingHat/issues/29).
