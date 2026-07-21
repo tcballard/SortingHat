@@ -12,7 +12,7 @@ This note describes the Mac App Store build only.
 
 ## App Store Connect answer
 
-After build `0.1.0 (2)` is uploaded, processed, selected, and verified, choose **Data Not Collected** in App Store Connect.
+Build `0.1.0 (2)` is uploaded, processed, selected, and verified. Choose **Data Not Collected** in App Store Connect.
 
 Do not apply this answer to Developer ID, source, or CLI distributions without separately evaluating their configured provider behavior.
 
