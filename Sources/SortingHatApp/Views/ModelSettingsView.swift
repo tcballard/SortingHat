@@ -42,8 +42,10 @@ struct ModelSettingsView: View {
                     .tabItem { Label("Apple", systemImage: "cpu") }
                 localPane
                     .tabItem { Label("Ollama", systemImage: "desktopcomputer") }
+                #if !SORTING_HAT_APP_STORE
                 cloudPane
                     .tabItem { Label("OpenAI", systemImage: "cloud") }
+                #endif
             }
             .padding(16)
 
@@ -171,7 +173,9 @@ struct ModelSettingsView: View {
                     Text("Automatic").tag(ModelProvider.automatic)
                     Text("Apple").tag(ModelProvider.apple)
                     Text("Ollama").tag(ModelProvider.ollama)
+                    #if !SORTING_HAT_APP_STORE
                     Text("OpenAI").tag(ModelProvider.openai)
+                    #endif
                 }
                 .pickerStyle(.radioGroup)
             }
@@ -417,13 +421,13 @@ struct ModelSettingsView: View {
     private var localPane: some View {
         SettingsPane(
             title: "Local Ollama",
-            description: "Connect Sorting Hat to an Ollama model running on this Mac or your local network."
+            description: localProviderDescription
         ) {
             Form {
                 TextField("Server URL", text: $url)
                 TextField("Model", text: $ollamaModel, prompt: Text("For example: gemma3:4b"))
             }
-            Text("Files are sent only to the server address above. Automatic uses Ollama when Apple generation is unavailable.")
+            Text(localProviderFootnote)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -524,7 +528,7 @@ struct ModelSettingsView: View {
 
     private var providerHelp: String {
         switch provider {
-        case .automatic: "Tries on-device Apple Intelligence first, then configured Ollama and OpenAI fallbacks."
+        case .automatic: automaticProviderHelp
         case .apple: "Uses only the selected Apple policy. On-device processing remains local."
         case .ollama: "Uses only the configured Ollama server."
         case .openai: "Uses OpenAI directly and may send extracted file context to the service."
@@ -542,11 +546,43 @@ struct ModelSettingsView: View {
 
     private var privacySummary: String {
         switch provider {
-        case .automatic: "Uses on-device Apple Intelligence first. Network providers are used only when configured."
+        case .automatic: automaticPrivacySummary
         case .apple: "Apple processing remains on this Mac."
         case .ollama: "File context is sent only to the Ollama server address you configure."
         case .openai: "Extracted file context may be sent to OpenAI."
         }
+    }
+
+    private var automaticProviderHelp: String {
+        #if SORTING_HAT_APP_STORE
+        "Tries on-device Apple Intelligence first, then Ollama running on this Mac."
+        #else
+        "Tries on-device Apple Intelligence first, then configured Ollama and OpenAI fallbacks."
+        #endif
+    }
+
+    private var automaticPrivacySummary: String {
+        #if SORTING_HAT_APP_STORE
+        "File context stays on this Mac. Remote model providers are unavailable."
+        #else
+        "Uses on-device Apple Intelligence first. Network providers are used only when configured."
+        #endif
+    }
+
+    private var localProviderDescription: String {
+        #if SORTING_HAT_APP_STORE
+        "Connect Sorting Hat to Ollama running on this Mac. Remote and local-network servers are unavailable in this build."
+        #else
+        "Connect Sorting Hat to an Ollama model running on this Mac or your local network."
+        #endif
+    }
+
+    private var localProviderFootnote: String {
+        #if SORTING_HAT_APP_STORE
+        "Only localhost, 127.0.0.1, and ::1 are accepted. Automatic uses local Ollama when Apple generation is unavailable."
+        #else
+        "Files are sent only to the server address above. Automatic uses Ollama when Apple generation is unavailable."
+        #endif
     }
 
 }

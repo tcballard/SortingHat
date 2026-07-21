@@ -57,7 +57,8 @@ Unlike the Developer ID build, its main app enables App Sandbox with only:
 - the shared App Group used by the Finder Action queue;
 - app-scoped security bookmarks;
 - read/write access to folders the person explicitly selects;
-- outgoing client connections for explicitly configured Ollama or OpenAI use.
+- outgoing client connections solely for Ollama restricted to loopback on the
+  same Mac. OpenAI, LAN, and remote Ollama routes are unavailable in this build.
 
 The Finder Action stays sandboxed and read-only for selected Finder items. It
 copies accepted input into the App Group queue; it does not receive broad write

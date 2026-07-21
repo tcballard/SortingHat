@@ -21,7 +21,7 @@
 - Platforms and minimum versions: macOS 14 or later; Apple on-device generation requires macOS 26, Apple Intelligence, and a supported Mac
 - Rollout or eligibility: Public Mac App Store after manual release and review approval
 - Pricing: Owner decision required; free is recommended for the first submission
-- Material limitations: Model availability affects sorting; uncertain items require review; optional Ollama and OpenAI providers have separate privacy implications
+- Material limitations: Model availability affects sorting; uncertain items require review; Store Ollama connections are restricted to the same Mac
 - Required disclosures: Optional provider transmission, folder access, no developer account, and Finder Action copy-only intake
 
 ## Delivery contract

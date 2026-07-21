@@ -88,11 +88,18 @@ final class HatStore {
         isProcessing = true
         defer { isProcessing = false; refreshInbox() }
         do {
-            let config = try ConfigLoader.load(configURL)
+            let loadedConfig = try ConfigLoader.load(configURL)
+            #if SORTING_HAT_APP_STORE
+            let config = LocalOnlyProviderPolicy.normalized(loadedConfig)
+            let openAIKey = ""
+            #else
+            let config = loadedConfig
+            let openAIKey = APIKeyStore.load()
+            #endif
             let configuredInbox = Self.expandedURL(config.inbox)
             let output = Self.expandedURL(config.output)
             let analyzer = PreferredAnalyzer(ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
-                                             openAIModel: config.openAIModel, openAIKey: APIKeyStore.load(), provider: config.modelProvider,
+                                             openAIModel: config.openAIModel, openAIKey: openAIKey, provider: config.modelProvider,
                                              appleModel: config.appleModel == .pcc ? .system : config.appleModel,
                                              appleUseCase: config.appleUseCase, appleGuardrails: config.appleGuardrails)
             let organizer = Organizer(inbox: configuredInbox, output: output, rules: config.rules, analyzer: analyzer)
@@ -303,26 +310,46 @@ final class HatStore {
     }
 
     func loadModelSettings() throws -> (provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase, appleGuardrails: AppleGuardrails, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
-        let config = try ConfigLoader.load(configURL)
+        let loadedConfig = try ConfigLoader.load(configURL)
+        #if SORTING_HAT_APP_STORE
+        let config = LocalOnlyProviderPolicy.normalized(loadedConfig)
+        let openAIKey = ""
+        #else
+        let config = loadedConfig
+        let openAIKey = APIKeyStore.load()
+        #endif
         let appModel: AppleModelSelection = config.appleModel == .pcc ? .system : config.appleModel
         return (config.modelProvider, appModel, config.appleUseCase, config.appleGuardrails,
-                config.ollamaURL, config.ollamaModel, config.openAIModel, APIKeyStore.load())
+                config.ollamaURL, config.ollamaModel, config.openAIModel, openAIKey)
     }
 
     func saveModelSettings(provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase,
                            appleGuardrails: AppleGuardrails, url: String,
                            ollamaModel: String, openAIModel: String, openAIKey: String) throws {
+        #if SORTING_HAT_APP_STORE
+        let savedURL = try LocalOnlyProviderPolicy.validatedOllamaURL(url)
+        let savedProvider: ModelProvider = provider == .openai ? .automatic : provider
+        #else
         guard URL(string: url) != nil else { throw HatError.invalidConfig("Ollama URL is not valid") }
+        let savedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedProvider = provider
+        #endif
         var config = try ConfigLoader.load(configURL)
-        config.ollamaURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        config.ollamaURL = savedURL
         config.ollamaModel = ollamaModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        #if SORTING_HAT_APP_STORE
+        config.openAIModel = ""
+        #else
         config.openAIModel = openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        config.modelProvider = provider
+        #endif
+        config.modelProvider = savedProvider
         config.appleModel = appleModel == .pcc ? .system : appleModel
         config.appleUseCase = appleUseCase
         config.appleGuardrails = appleGuardrails
         config.allowApplePCC = false
+        #if !SORTING_HAT_APP_STORE
         try APIKeyStore.save(openAIKey.trimmingCharacters(in: .whitespacesAndNewlines))
+        #endif
         try ConfigLoader.save(config, to: configURL)
         status = "Model Settings Updated"
     }

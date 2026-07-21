@@ -4,7 +4,7 @@
 - Release: First Mac App Store submission
 - Version: 0.1.0
 - Build: 1
-- Pack status: Structurally ready with three explicit submission blockers
+- Pack status: Local-only build 2 prepared; upload, URL publication, and installed verification remain
 - Publication authority: Tom Ballard only
 - Exact next action: Resolve version identity and Store-provider privacy, merge PR #30, then enter the supplied metadata
 
@@ -16,7 +16,7 @@
 | Screenshots | outputs/app-store/screenshots | Ready | C01-C03 | Two opaque 1440×900 JPEGs |
 | Icon | outputs/app-store/icon/app-icon-1024.png | Ready | None | Reference copy of the icon already embedded in build 1 |
 | App Review | outputs/app-store/REVIEW_NOTES.md | Ready | C01-C03 | Phone number must be entered by owner |
-| Privacy | outputs/app-store/APP_PRIVACY.md and docs/privacy.md | Blocked | C02, C04, C05 | Choose Store provider scope before attesting |
+| Privacy | outputs/app-store/APP_PRIVACY.md and docs/privacy.md | Ready | C02, C04, C05 | Select Data Not Collected after build 2 verification |
 | Support | docs/support.md | Ready | C01-C03 | Public URL works only after merge |
 
 ## Omitted or not-applicable deliverables
@@ -29,7 +29,7 @@
 
 - Verified: Core renaming/routing, on-device Apple processing, copy-only Finder intake, and no tracking/advertising.
 - Qualified: On-device generation requirements and optional provider behavior.
-- Blocked or removed: “Data Not Collected” is blocked while OpenAI remains; PCC is removed from shipping claims.
+- Blocked or removed: PCC, OpenAI, LAN Ollama, and remote Ollama are removed from Store shipping claims.
 
 ## Validation performed
 
@@ -41,7 +41,6 @@
 
 ## Remaining decisions and blockers
 
-- Match App Store version 1.0 to build marketing version 0.1.0.
-- Either remove cloud providers from the Store build or disclose OpenAI collection conservatively.
+- Upload and select local-only build 0.1.0 (2).
 - Merge the support/privacy pages, then verify their public URLs.
-- Supply the App Review phone number, choose price, complete age rating/export compliance/content rights, change release mode to manual, and uncheck sign-in required.
+- Choose price, complete App Privacy, export compliance, and content rights, then run installed-build verification.

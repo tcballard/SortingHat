@@ -1649,4 +1649,34 @@ struct SortingHatTests {
         #expect(store.resolve(expectedInbox: configuredInbox) == .mismatched(bookmarked: formerInbox, expected: configuredInbox))
         #expect(store.resolve(expectedInbox: configuredInbox).needsRecovery)
     }
+
+    @Test func localOnlyPolicyAcceptsOnlyLoopbackOllamaURLs() throws {
+        #expect(LocalOnlyProviderPolicy.isLoopbackOllamaURL("http://127.0.0.1:11434"))
+        #expect(LocalOnlyProviderPolicy.isLoopbackOllamaURL("http://localhost:11434"))
+        #expect(LocalOnlyProviderPolicy.isLoopbackOllamaURL("https://[::1]:11434"))
+        #expect(!LocalOnlyProviderPolicy.isLoopbackOllamaURL("http://192.168.1.10:11434"))
+        #expect(!LocalOnlyProviderPolicy.isLoopbackOllamaURL("https://models.example.com"))
+        #expect(throws: HatError.self) {
+            try LocalOnlyProviderPolicy.validatedOllamaURL("http://models.example.com")
+        }
+    }
+
+    @Test func localOnlyPolicyNeutralizesRemoteAndOpenAIConfiguration() {
+        var config = Configuration()
+        config.ollamaURL = "https://models.example.com"
+        config.ollamaModel = "remote-model"
+        config.openAIModel = "cloud-model"
+        config.modelProvider = .openai
+        config.appleModel = .pcc
+        config.allowApplePCC = true
+
+        let normalized = LocalOnlyProviderPolicy.normalized(config)
+
+        #expect(normalized.ollamaURL == LocalOnlyProviderPolicy.defaultOllamaURL)
+        #expect(normalized.ollamaModel.isEmpty)
+        #expect(normalized.openAIModel.isEmpty)
+        #expect(normalized.modelProvider == .automatic)
+        #expect(normalized.appleModel == .system)
+        #expect(!normalized.allowApplePCC)
+    }
 }

@@ -537,6 +537,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcballard.sortinghat;
 				PRODUCT_NAME = "Sorting Hat";
 				SDKROOT = macosx;
+				SORTING_HAT_LOCAL_ONLY = NO;
 			};
 			name = Release;
 		};
@@ -555,6 +556,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcballard.sortinghat;
 				PRODUCT_NAME = "Sorting Hat";
 				SDKROOT = macosx;
+				SORTING_HAT_LOCAL_ONLY = NO;
 			};
 			name = Debug;
 		};
@@ -594,6 +596,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.tcballard.sortinghat;
 				PRODUCT_NAME = "Sorting Hat";
 				SDKROOT = macosx;
+				SORTING_HAT_LOCAL_ONLY = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) SORTING_HAT_APP_STORE";
 			};
 			name = AppStore;
 		};

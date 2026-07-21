@@ -1,6 +1,6 @@
 # Sorting Hat privacy policy
 
-Last updated: 20 July 2026
+Last updated: 21 July 2026
 
 Sorting Hat is a macOS file-organising app. It processes files that you explicitly add to its Inbox or Finder Action so it can extract useful context, rename them, apply Finder tags, and move them into folders you choose.
 
@@ -8,16 +8,13 @@ Sorting Hat is a macOS file-organising app. It processes files that you explicit
 
 When Apple Foundation Models is selected, file context is processed on your Mac. Text extraction from supported documents and images also uses Apple frameworks on your Mac. Sorting Hat does not send that content to the developer and the developer does not operate an analytics or tracking service for the app.
 
-The app stores its configuration, rules, recent activity, security-scoped folder bookmarks, and optional provider credentials locally. OpenAI credentials are stored in the macOS Keychain.
+The app stores its configuration, rules, recent activity, and security-scoped folder bookmarks locally.
 
-## Optional providers
+## Local model providers
 
-Sorting Hat can be configured to use providers other than Apple's on-device model:
+The Mac App Store build can use either Apple's on-device model or Ollama running on the same Mac. Ollama connections are restricted to `localhost`, `127.0.0.1`, and `::1`. Remote, local-network, and OpenAI model routes are unavailable in this build.
 
-- **Ollama:** extracted file context is sent to the server address you configure. That server may be on your Mac, your local network, or a remote host. Its operator's privacy and retention practices apply.
-- **OpenAI:** when you explicitly configure and select OpenAI, extracted file context and your API credential are sent to OpenAI to provide the sorting result. OpenAI's API data-usage and retention terms apply.
-
-These providers are optional. No provider credentials are included with the app, and Sorting Hat does not require an account with the developer.
+Sorting Hat does not require an account with the developer and does not send file context to a service operated by the developer or another remote model provider.
 
 ## Files and Finder access
 
@@ -31,7 +28,7 @@ Sorting Hat contains no advertising SDK, does not track you across apps or websi
 
 Sorting Hat's local activity history and settings remain on your Mac until you remove them or uninstall the app. You can remove individual review items in the app. Files already organised by Sorting Hat remain in the output folders you selected.
 
-For optional providers, retention is controlled by the provider or server operator. Consult that provider's current policy before enabling it.
+If you run Ollama locally, its model data and processing remain under your control on that Mac.
 
 ## Contact
 

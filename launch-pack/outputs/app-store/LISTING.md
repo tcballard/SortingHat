@@ -29,7 +29,7 @@ Built for a calmer workflow:
 • Copy-only Finder Action, so the original file stays untouched
 • App Sandbox access limited to folders and files you select
 
-On supported Macs running macOS 26 with Apple Intelligence, Sorting Hat can use Apple's Foundation Model on the device. It can also connect to an Ollama server you configure or, optionally, your own OpenAI API account. Cloud providers are never required by the developer and no developer account is needed.
+On supported Macs running macOS 26 with Apple Intelligence, Sorting Hat can use Apple's Foundation Model on the device. On earlier Macs, or as a local fallback, it can connect only to Ollama running on the same Mac. The Mac App Store build has no remote model provider and no developer account is needed.
 
 Sorting Hat validates every proposed filesystem action before it moves a file. Unsafe paths, invalid filenames and uncertain decisions are held for review instead of being guessed. Existing files are protected from being overwritten.
 

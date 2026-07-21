@@ -1,6 +1,6 @@
 # Sorting Hat support
 
-Sorting Hat requires macOS 14 or later. Apple's on-device Foundation Model requires macOS 26, Apple Intelligence, and a supported Mac. On other supported Macs, you can configure a local Ollama server or an optional OpenAI provider.
+Sorting Hat requires macOS 14 or later. Apple's on-device Foundation Model requires macOS 26, Apple Intelligence, and a supported Mac. On other supported Macs, the Mac App Store build can connect to Ollama running on that same Mac. Remote model providers are unavailable in the Store build.
 
 ## Getting started
 

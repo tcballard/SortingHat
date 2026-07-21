@@ -63,6 +63,11 @@ if strings "$APP_BINARY" | grep -Fq "/usr/bin/fm"; then
   exit 1
 fi
 
+if ! strings "$APP_BINARY" | grep -Fq "The Mac App Store build can connect only to Ollama running on this Mac"; then
+  echo "App Store binary is missing the local-only provider policy." >&2
+  exit 1
+fi
+
 # Ad-hoc signing is only for structural entitlement inspection. App Store
 # submission still requires Apple Distribution identities and matching profiles.
 xattr -cr "$APP"
@@ -94,6 +99,7 @@ assert_plist_value "$EXTENSION_ACTUAL" "com.apple.security.app-sandbox" true
 assert_plist_value "$EXTENSION_ACTUAL" "com.apple.security.application-groups:0" R8HXTBY3NM.com.tcballard.sortinghat
 assert_plist_value "$EXTENSION_ACTUAL" "com.apple.security.files.user-selected.read-only" true
 assert_plist_value "$APP/Contents/Info.plist" ITSAppUsesNonExemptEncryption false
+assert_plist_value "$APP/Contents/Info.plist" SortingHatLocalOnlyDistribution YES
 
 echo "App Store structural preflight passed."
 echo "Archive: $ARCHIVE_PATH"

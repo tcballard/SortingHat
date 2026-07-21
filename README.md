@@ -89,7 +89,7 @@ rules:
   - Put everything else in Files/YYYY-MM and add one useful topic tag.
 ```
 
-Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings**. Apple's shipping app integration uses the on-device Foundation Model; automatic provider selection can fall back to configured Ollama and OpenAI providers when Apple is unavailable. Content extraction, unsafe paths, and invalid filing decisions never trigger cloud escalation. Private Cloud Compute remains research-only and is not exposed by the shipping app.
+Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings** in source and Developer ID builds. Apple's shipping app integration uses the on-device Foundation Model; automatic provider selection can fall back to configured providers when Apple is unavailable. The Mac App Store build is deliberately local-only: it offers Apple on-device processing and Ollama restricted to loopback addresses on the same Mac, with no OpenAI or remote Ollama route. Content extraction, unsafe paths, and invalid filing decisions never trigger cloud escalation. Private Cloud Compute remains research-only and is not exposed by the shipping app.
 
 For the on-device system model, `apple_use_case: content-tagging` opts into the Foundation Models framework's content-tagging specialization. `apple_guardrails: permissive-content-transformations` relaxes the system model's content-transformation guardrails for filing material that the default policy refuses; use the default unless your rules require that behavior. These system-only options are omitted from PCC requests. Apple requests use in-process guided generation and greedy sampling. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`.
 
