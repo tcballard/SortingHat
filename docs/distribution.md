@@ -86,14 +86,14 @@ App Store Connect record for `com.tcballard.sortinghat`. Then archive the
 Connect**, or export a correctly signed archive with
 `Configuration/AppStoreExportOptions.plist`.
 
-App Store Connect build **0.1.0 (1)** is uploaded and selectable. Before
-submission, complete the product page, support and privacy URLs, screenshots,
-age rating, App Privacy answers, export-compliance answers, and review notes.
-The submission pack under [`launch-pack/`](../launch-pack/) contains prepared
-copy, genuine screenshots, icon evidence, review instructions, and an explicit
-blocker checklist. Review notes explain the dashboard and menu-bar entry points,
-the required user-selected Inbox and output folders, how to enable the bundled
-Finder Action, and how to exercise sorting without credentials.
+App Store Connect build **0.1.0 (2)** passed Apple validation, processed as
+`VALID`, and is selected for version 0.1.0. The listing, screenshots,
+categories, age rating, review contact, and review notes are saved. Before
+submission, choose pricing, attest **Data Not Collected**, complete export
+compliance and content rights, and run the installed-build smoke test. The
+submission pack under [`launch-pack/`](../launch-pack/) contains the verified
+copy, genuine screenshots, icon evidence, review instructions, and remaining
+blocker checklist.
 
 An App Store/TestFlight build must still be manually verified for first-run
 setup, persisted folder access across relaunch, on-device sorting, manual review,

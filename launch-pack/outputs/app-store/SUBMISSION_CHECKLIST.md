@@ -26,6 +26,6 @@
 
 - Confirm the saved review notes and contact details match `REVIEW_NOTES.md`.
 - Keep build 0.1.0 (2) selected.
-- Verify the public support and privacy URLs anonymously after PR #30 merges.
+- Public support and privacy URLs returned HTTP 200 on 22 July 2026; recheck them in the final preview.
 - Run an installed-build smoke test for first setup, persisted folder access, Apple on-device sorting, manual review, Finder intake, pause/resume, and launch at login.
 - Submit only after every blocker in `RELEASE_CHECKLIST.md` is resolved by the owner.
