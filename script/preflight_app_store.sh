@@ -13,6 +13,10 @@ PRIVACY_MANIFEST="$APP/Contents/Resources/PrivacyInfo.xcprivacy"
 APP_ICON="$APP/Contents/Resources/AppIcon.icns"
 ASSET_CATALOG="$APP/Contents/Resources/Assets.car"
 APP_ICON_SOURCE="$ROOT_DIR/Sources/SortingHatApp/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png"
+VERSION="$($ROOT_DIR/script/release_identity.sh --version)"
+BUILD="$($ROOT_DIR/script/release_identity.sh --build)"
+
+"$ROOT_DIR/script/release_identity.sh" --verify "$VERSION" "$BUILD"
 
 rm -rf "$DERIVED_DATA" "$ARCHIVE_PATH"
 xcodebuild \
@@ -103,6 +107,10 @@ assert_plist_value "$EXTENSION_ACTUAL" "com.apple.security.application-groups:0"
 assert_plist_value "$EXTENSION_ACTUAL" "com.apple.security.files.user-selected.read-only" true
 assert_plist_value "$APP/Contents/Info.plist" ITSAppUsesNonExemptEncryption false
 assert_plist_value "$APP/Contents/Info.plist" SortingHatLocalOnlyDistribution YES
+assert_plist_value "$APP/Contents/Info.plist" CFBundleShortVersionString "$VERSION"
+assert_plist_value "$APP/Contents/Info.plist" CFBundleVersion "$BUILD"
+assert_plist_value "$EXTENSION/Contents/Info.plist" CFBundleShortVersionString "$VERSION"
+assert_plist_value "$EXTENSION/Contents/Info.plist" CFBundleVersion "$BUILD"
 
 echo "App Store structural preflight passed."
 echo "Archive: $ARCHIVE_PATH"

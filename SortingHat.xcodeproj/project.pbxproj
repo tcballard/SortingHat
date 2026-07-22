@@ -66,6 +66,7 @@
 		88ADD613E69FA0224084FE99 /* ActionRequestHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionRequestHandler.swift; sourceTree = "<group>"; };
 		A0EB807461CD2FBEAC90182D /* HatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HatStore.swift; sourceTree = "<group>"; };
 		BC8CEA00F91AA384944B6DC1 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
+		C0A331DE0605C30EA78F5E41 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		C24EBAF0EB6D03C27BC24A53 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
 		CF783C14FBCE3B3B969A8140 /* RulesEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesEditorView.swift; sourceTree = "<group>"; };
 		D4A766D04A9129702226E922 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -161,6 +162,7 @@
 			isa = PBXGroup;
 			children = (
 				60D0A89FFA32378E1092BFB0 /* PrivacyInfo.xcprivacy */,
+				C0A331DE0605C30EA78F5E41 /* Release.xcconfig */,
 			);
 			path = Configuration;
 			sourceTree = "<group>";
@@ -340,6 +342,7 @@
 /* Begin XCBuildConfiguration section */
 		19EFF1725607A2884B659F81 /* AppStore */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0A331DE0605C30EA78F5E41 /* Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = arm64;
@@ -399,6 +402,7 @@
 		};
 		2505882B3D577106A5B4592E /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0A331DE0605C30EA78F5E41 /* Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = arm64;
@@ -458,6 +462,7 @@
 		};
 		6DC971CA1048E9F550FC314B /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = C0A331DE0605C30EA78F5E41 /* Release.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ARCHS = arm64;

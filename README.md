@@ -135,17 +135,20 @@ The 12-case private corpus is a regression gate, not a universal accuracy claim.
 swift test
 ./script/generate_xcode_project.sh
 ./script/preflight_app_store.sh
-# After one-time notarytool Keychain setup:
-./script/release_local.sh 0.2.0
+# After one-time signing and notarization setup:
+./script/release_candidate.sh
 ```
 
 Inference sits behind `FileAnalyzing`, so filesystem safety can be tested without a live model. The Foundation Models decision path can also be shared by a future iPhone or iPad client, but iOS cannot behave like a continuously watched Mac folder. The [iOS client boundary](docs/ios-client-architecture.md) documents what is reusable and what needs a Files or Share-extension workflow.
 
 ## Distribution status
 
-There are two release tracks. They are deliberately separate.
+There is one release train with two signed delivery channels. Both channels are
+built from the same source commit and share the version and build number in
+`Configuration/Release.xcconfig`; release tooling rejects a mismatched tag or
+artifact. Their security contracts remain intentionally different.
 
 - **Mac App Store:** local-only build `0.1.0 (2)` passed Apple validation, processed as `VALID`, and is selected in App Store Connect. It has not been submitted for review or published. Pricing, App Privacy, export compliance, content rights, and installed-build verification still need owner sign-off.
-- **GitHub and Homebrew:** the downloadable `v0.1.0` artifact is an experimental, ad-hoc-signed pre-release. It is not Developer ID signed or notarised, so Gatekeeper may block it. Issue [#24](https://github.com/tcballard/SortingHat/issues/24) tracks the signed and notarised release path.
+- **GitHub and Homebrew:** the existing downloadable `v0.1.0` artifact predates the unified release tooling and remains an experimental, ad-hoc-signed pre-release. The next release candidate is Developer ID signed, notarised, stapled, and verified from its extracted ZIP before publication. Issue [#24](https://github.com/tcballard/SortingHat/issues/24) tracks that first signed publication.
 
 Issue [#29](https://github.com/tcballard/SortingHat/issues/29) tracks the remaining App Store work. The [distribution guide](docs/distribution.md), [privacy policy](docs/privacy.md), and [support page](docs/support.md) hold the channel-specific details.
