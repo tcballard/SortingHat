@@ -17,6 +17,11 @@ verifies the Developer ID ZIP, builds and verifies the Apple Distribution
 archive and package, and records their checksums and source commit in one
 manifest. It does not tag, publish, upload, or submit either artifact.
 
+The current unified release target is **0.1.1 (3)**. The candidate must come
+from the eventual release commit; the existing GitHub `v0.1.0` artifact and
+App Store Connect build `0.1.0 (2)` remain historical channel artifacts until
+their replacements are independently verified.
+
 ## Developer ID and Homebrew — Issue #24
 
 The tag-triggered release workflow already fails closed while it:
@@ -41,6 +46,9 @@ requests:
 
 `HOMEBREW_TAP_TOKEN` is already configured. A successful signed release and a
 fresh downloaded-artifact verification remain required before closing Issue #24.
+Create the `v0.1.1` tag only after all certificate and notarization secrets are
+confirmed; otherwise the workflow intentionally fails closed rather than
+publishing an unsigned artifact.
 
 The local Mac already has the Developer ID Application identity. Store reusable
 notarization credentials once in the login Keychain (the password is requested
@@ -109,7 +117,8 @@ scheme, checks the nested signatures and shared release identity, and exports
 with `Configuration/AppStoreExportOptions.plist`. It does not upload or submit.
 
 App Store Connect build **0.1.0 (2)** passed Apple validation, processed as
-`VALID`, and is selected for version 0.1.0. The listing, screenshots,
+`VALID`, and remains selected for version 0.1.0. The matching **0.1.1 (3)**
+candidate has not been uploaded. The listing, screenshots,
 categories, age rating, review contact, and review notes are saved. Before
 submission, choose pricing, attest **Data Not Collected**, complete export
 compliance and content rights, and run the installed-build smoke test. The

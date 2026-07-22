@@ -136,7 +136,7 @@ swift test
 ./script/generate_xcode_project.sh
 ./script/preflight_app_store.sh
 # After one-time signing and notarization setup:
-./script/release_candidate.sh
+./script/release_candidate.sh 0.1.1 3
 ```
 
 Inference sits behind `FileAnalyzing`, so filesystem safety can be tested without a live model. The Foundation Models decision path can also be shared by a future iPhone or iPad client, but iOS cannot behave like a continuously watched Mac folder. The [iOS client boundary](docs/ios-client-architecture.md) documents what is reusable and what needs a Files or Share-extension workflow.
@@ -148,7 +148,8 @@ built from the same source commit and share the version and build number in
 `Configuration/Release.xcconfig`; release tooling rejects a mismatched tag or
 artifact. Their security contracts remain intentionally different.
 
-- **Mac App Store:** local-only build `0.1.0 (2)` passed Apple validation, processed as `VALID`, and is selected in App Store Connect. It has not been submitted for review or published. Pricing, App Privacy, export compliance, content rights, and installed-build verification still need owner sign-off.
-- **GitHub and Homebrew:** the existing downloadable `v0.1.0` artifact predates the unified release tooling and remains an experimental, ad-hoc-signed pre-release. The next release candidate is Developer ID signed, notarised, stapled, and verified from its extracted ZIP before publication. Issue [#24](https://github.com/tcballard/SortingHat/issues/24) tracks that first signed publication.
+- **Release target:** `v0.1.1 (3)` is configured as the first unified candidate. Its [release notes](docs/releases/v0.1.1.md) are prepared, but no candidate has been notarised, uploaded, submitted, or published yet.
+- **Mac App Store:** the earlier local-only build `0.1.0 (2)` passed Apple validation, processed as `VALID`, and remains selected in App Store Connect until the matching `0.1.1 (3)` candidate is uploaded and verified. Nothing has been submitted for review or published. Pricing, App Privacy, export compliance, content rights, and installed-build verification still need owner sign-off.
+- **GitHub and Homebrew:** the existing downloadable `v0.1.0` artifact predates the unified release tooling and remains an experimental, ad-hoc-signed pre-release. Issue [#24](https://github.com/tcballard/SortingHat/issues/24) tracks replacing it with the signed and notarised `v0.1.1` release.
 
 Issue [#29](https://github.com/tcballard/SortingHat/issues/29) tracks the remaining App Store work. The [distribution guide](docs/distribution.md), [privacy policy](docs/privacy.md), and [support page](docs/support.md) hold the channel-specific details.
