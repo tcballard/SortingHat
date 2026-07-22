@@ -17,30 +17,37 @@ verifies the Developer ID ZIP, builds and verifies the Apple Distribution
 archive and package, and records their checksums and source commit in one
 manifest. It does not tag, publish, upload, or submit either artifact.
 
+The maintainer's Mac is the signing authority. Developer ID and Apple
+Distribution private keys remain in the local Keychain, and notarization uses a
+local Keychain profile or App Store Connect API key. GitHub never receives
+those credentials.
+
+The current unified release target is **0.1.1 (3)**. The candidate must come
+from the eventual release commit; the existing GitHub `v0.1.0` artifact and
+App Store Connect build `0.1.0 (2)` remain historical channel artifacts until
+their replacements are independently verified.
+
 ## Developer ID and Homebrew — Issue #24
 
-The tag-triggered release workflow already fails closed while it:
+The local release path fails closed while it:
 
-1. imports a Developer ID Application certificate into an ephemeral keychain;
-2. builds with hardened runtime and signs the Finder Action before the app;
+1. builds with hardened runtime and signs the Finder Action before the app;
+2. verifies the local Developer ID Application identity;
 3. verifies identities, App Group entitlements, bundle identifiers, and the
    extension contract;
 4. notarizes, staples, and validates with Gatekeeper;
-5. extracts and re-verifies the final ZIP before publishing it;
-6. updates the Homebrew cask with the final archive checksum.
+5. extracts and re-verifies the final ZIP;
+6. creates an owner-reviewable draft GitHub release only when explicitly asked.
 
-The GitHub workflow expects these repository secrets. Store them only as
-GitHub repository secrets, never in source, issues, workflow logs, or pull
-requests:
+After the owner publishes that draft, GitHub downloads and verifies the exact
+locally produced ZIP, then updates the Homebrew cask with its checksum. The
+repository needs only:
 
-- `DEVELOPER_ID_APPLICATION_P12`
-- `DEVELOPER_ID_APPLICATION_PASSWORD`
-- `BUILD_KEYCHAIN_PASSWORD`
-- `NOTARY_APPLE_ID`
-- `NOTARY_PASSWORD`
+- `HOMEBREW_TAP_TOKEN`
 
-`HOMEBREW_TAP_TOKEN` is already configured. A successful signed release and a
-fresh downloaded-artifact verification remain required before closing Issue #24.
+A successful signed release and a fresh downloaded-artifact verification remain
+required before closing Issue #24. Publishing the GitHub draft is the explicit
+owner gate; there is no tag-triggered cloud signing job.
 
 The local Mac already has the Developer ID Application identity. Store reusable
 notarization credentials once in the login Keychain (the password is requested
@@ -66,6 +73,18 @@ The script also accepts an App Store Connect API key through the
 `SORTING_HAT_NOTARY_KEY_PATH`, `SORTING_HAT_NOTARY_KEY_ID`, and
 `SORTING_HAT_NOTARY_ISSUER_ID` environment variables instead of a Keychain
 profile. Credentials are never read from the repository.
+
+After the unified candidate finishes, preflight the exact ZIP and create a
+draft release with separate commands:
+
+```sh
+./script/create_release_draft.sh
+./script/create_release_draft.sh --create
+```
+
+The first command is read-only. The second creates a draft GitHub release and
+uploads the verified ZIP; it still does not publish it. Publishing the draft
+triggers GitHub's artifact-verification and Homebrew-update workflow.
 
 ## Mac App Store — Issue #29
 
@@ -109,7 +128,8 @@ scheme, checks the nested signatures and shared release identity, and exports
 with `Configuration/AppStoreExportOptions.plist`. It does not upload or submit.
 
 App Store Connect build **0.1.0 (2)** passed Apple validation, processed as
-`VALID`, and is selected for version 0.1.0. The listing, screenshots,
+`VALID`, and remains selected for version 0.1.0. The matching **0.1.1 (3)**
+candidate has not been uploaded. The listing, screenshots,
 categories, age rating, review contact, and review notes are saved. Before
 submission, choose pricing, attest **Data Not Collected**, complete export
 compliance and content rights, and run the installed-build smoke test. The
