@@ -25,4 +25,4 @@ The app does not require a network connection when Apple's on-device provider is
 
 - Name: Tom Ballard
 - Email: tom@armytage.co
-- Phone: owner entry required in App Store Connect
+- Phone: saved in App Store Connect; deliberately not duplicated in the repository

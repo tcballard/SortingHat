@@ -58,12 +58,15 @@ if not any(
     raise SystemExit("Compiled asset catalog is missing the 512pt @2x AppIcon rendition.")
 PY
 
-if strings "$APP_BINARY" | grep -Fq "/usr/bin/fm"; then
+BINARY_STRINGS="$DERIVED_DATA/app-store-binary-strings.txt"
+strings "$APP_BINARY" > "$BINARY_STRINGS"
+
+if grep -Fq "/usr/bin/fm" "$BINARY_STRINGS"; then
   echo "App Store binary unexpectedly contains the legacy fm executable path." >&2
   exit 1
 fi
 
-if ! strings "$APP_BINARY" | grep -Fq "The Mac App Store build can connect only to Ollama running on this Mac"; then
+if ! grep -Fq "The Mac App Store build can connect only to Ollama running on this Mac" "$BINARY_STRINGS"; then
   echo "App Store binary is missing the local-only provider policy." >&2
   exit 1
 fi
