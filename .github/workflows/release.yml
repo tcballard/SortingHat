@@ -1,187 +1,59 @@
-name: Release
+name: Release Artifact
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  verify-and-update-homebrew:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
-      - name: Install pinned XcodeGen
-        run: |
-          archive="$RUNNER_TEMP/xcodegen-2.44.1.zip"
-          install_root="$RUNNER_TEMP/xcodegen-2.44.1"
-          bin="$install_root/xcodegen/bin"
-          curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip" -o "$archive"
-          echo "a2e905fb68446e9bb4008cdfe2e13e3f176d0cbcca828b71770f8e53fca91b73  $archive" | shasum -a 256 -c -
-          ditto -x -k "$archive" "$install_root"
-          test -x "$bin/xcodegen"
-          "$bin/xcodegen" --version | grep -Fx "Version: 2.44.1"
-          echo "$bin" >> "$GITHUB_PATH"
-      - name: Verify generated Xcode project and Info plists are current
-        run: |
-          ./script/generate_xcode_project.sh
-          git diff --exit-code -- \
-            SortingHat.xcodeproj \
-            Configuration/SortingHatApp-Info.plist \
-            Configuration/SendToSortingHatAction-Info.plist
+      - name: Check out the published release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
       - name: Verify tag matches the shared release identity
-        run: ./script/release_identity.sh --verify "${GITHUB_REF_NAME#v}"
-      - name: Import Developer ID certificate
         env:
-          CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.BUILD_KEYCHAIN_PASSWORD }}
-        run: |
-          test -n "$CERTIFICATE_BASE64"
-          test -n "$CERTIFICATE_PASSWORD"
-          test -n "$KEYCHAIN_PASSWORD"
-          certificate_path="$RUNNER_TEMP/sorting-hat-developer-id.p12"
-          keychain_path="$RUNNER_TEMP/sorting-hat-signing.keychain-db"
-          echo -n "$CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security set-keychain-settings -lut 21600 "$keychain_path"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security import "$certificate_path" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
-          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security list-keychains -d user -s "$keychain_path"
-      - name: Build and sign app from the extension outward
-        env:
-          BUILD_CONFIGURATION: Release
-          SORTING_HAT_SIGN_IDENTITY: "Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
-        run: ./script/build_and_run.sh package
-      - name: Verify nested signatures and entitlements
-        run: |
-          app="dist/Sorting Hat.app"
-          extension="dist/Sorting Hat.app/Contents/PlugIns/Send to Sorting Hat.appex"
-          app_info="$app/Contents/Info.plist"
-          extension_info="$extension/Contents/Info.plist"
-          version="$(./script/release_identity.sh --version)"
-          build="$(./script/release_identity.sh --build)"
-          test -d "$extension"
-          codesign --verify --strict --deep --verbose=2 "$extension"
-          codesign --verify --strict --deep --verbose=2 "$app"
-          codesign -dvvv "$extension" 2>&1 | grep -Fx "Authority=Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
-          codesign -dvvv "$extension" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
-          codesign -dvvv "$app" 2>&1 | grep -Fx "Authority=Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
-          codesign -dvvv "$app" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_info" | grep -Fx com.tcballard.sortinghat
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$extension_info" | grep -Fx com.tcballard.sortinghat.finder-action
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app_info" | grep -Fx "$version"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$app_info" | grep -Fx "$build"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$extension_info" | grep -Fx "$version"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$extension_info" | grep -Fx "$build"
-          codesign -d --entitlements :- "$extension" > "$RUNNER_TEMP/extension-entitlements.plist" 2>/dev/null
-          codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/app-entitlements.plist" 2>/dev/null
-          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$RUNNER_TEMP/extension-entitlements.plist" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
-          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$RUNNER_TEMP/app-entitlements.plist" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
-          /usr/libexec/PlistBuddy -c "Print :com.apple.security.app-sandbox" "$RUNNER_TEMP/extension-entitlements.plist" | grep -Fx true
-          /usr/libexec/PlistBuddy -c "Print :com.apple.security.files.user-selected.read-only" "$RUNNER_TEMP/extension-entitlements.plist" | grep -Fx true
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$extension_info" | grep -Fx com.apple.services
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$extension_info" | grep -Fx SendToSortingHatAction.ActionRequestHandler
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceFinderPreviewLabel" "$extension_info" | grep -Fx "Send to Sorting Hat"
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeEditor
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceAllowsFinderPreviewItem" "$extension_info" | grep -Fx true
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule" "$extension_info" | grep -Fx 'SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == $extensionItem.attachments.@count).@count == 1'
-      - name: Notarize and staple app
-        env:
-          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
-          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-        run: |
-          test -n "$NOTARY_APPLE_ID"
-          test -n "$NOTARY_PASSWORD"
-          submission="$RUNNER_TEMP/Sorting-Hat-notarization.zip"
-          ditto -c -k --sequesterRsrc --keepParent "dist/Sorting Hat.app" "$submission"
-          xcrun notarytool submit "$submission" \
-            --apple-id "$NOTARY_APPLE_ID" \
-            --password "$NOTARY_PASSWORD" \
-            --team-id R8HXTBY3NM \
-            --wait
-          xcrun stapler staple "dist/Sorting Hat.app"
-          xcrun stapler validate "dist/Sorting Hat.app"
-          spctl --assess --type execute --verbose=2 "dist/Sorting Hat.app"
-      - name: Archive verified app
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/Sorting Hat.app" "Sorting-Hat-${GITHUB_REF_NAME}.zip"
-      - name: Verify final release archive
-        run: |
-          archive="Sorting-Hat-${GITHUB_REF_NAME}.zip"
-          verification_root="$RUNNER_TEMP/final-release-verification"
-          app="$verification_root/Sorting Hat.app"
-          extension="$app/Contents/PlugIns/Send to Sorting Hat.appex"
-          app_info="$app/Contents/Info.plist"
-          extension_info="$extension/Contents/Info.plist"
-          app_entitlements="$RUNNER_TEMP/final-app-entitlements.plist"
-          extension_entitlements="$RUNNER_TEMP/final-extension-entitlements.plist"
-          version="$(./script/release_identity.sh --version)"
-          build="$(./script/release_identity.sh --build)"
-
-          test -f "$archive"
-          rm -rf "$verification_root"
-          mkdir -p "$verification_root"
-          ditto -x -k "$archive" "$verification_root"
-          test -d "$app"
-          test -d "$extension"
-
-          codesign --verify --strict --deep --verbose=2 "$extension"
-          codesign --verify --strict --deep --verbose=2 "$app"
-          codesign -dvvv "$extension" 2>&1 | grep -Fx "Authority=Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
-          codesign -dvvv "$extension" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
-          codesign -dvvv "$app" 2>&1 | grep -Fx "Authority=Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
-          codesign -dvvv "$app" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
-          xcrun stapler validate "$app"
-          spctl --assess --type execute --verbose=2 "$app"
-
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_info" | grep -Fx com.tcballard.sortinghat
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$extension_info" | grep -Fx com.tcballard.sortinghat.finder-action
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app_info" | grep -Fx "$version"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$app_info" | grep -Fx "$build"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$extension_info" | grep -Fx "$version"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$extension_info" | grep -Fx "$build"
-
-          codesign -d --entitlements :- "$app" > "$app_entitlements" 2>/dev/null
-          codesign -d --entitlements :- "$extension" > "$extension_entitlements" 2>/dev/null
-          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$app_entitlements" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
-          /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$extension_entitlements" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
-          /usr/libexec/PlistBuddy -c "Print :com.apple.security.app-sandbox" "$extension_entitlements" | grep -Fx true
-          /usr/libexec/PlistBuddy -c "Print :com.apple.security.files.user-selected.read-only" "$extension_entitlements" | grep -Fx true
-
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$extension_info" | grep -Fx com.apple.services
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPrincipalClass" "$extension_info" | grep -Fx SendToSortingHatAction.ActionRequestHandler
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceFinderPreviewLabel" "$extension_info" | grep -Fx "Send to Sorting Hat"
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeEditor
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceAllowsFinderPreviewItem" "$extension_info" | grep -Fx true
-          /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule" "$extension_info" | grep -Fx 'SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == $extensionItem.attachments.@count).@count == 1'
-      - name: Publish signed pre-release
+          TAG: ${{ github.event.release.tag_name }}
+        run: ./script/release_identity.sh --verify "${TAG#v}"
+      - name: Download the locally produced release archive
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "Sorting-Hat-${GITHUB_REF_NAME}.zip" \
-            --prerelease \
-            --generate-notes \
-            --title "Sorting Hat $GITHUB_REF_NAME" \
-            --notes "Signed and notarized macOS pre-release. Enable the bundled Send to Sorting Hat action in System Settings → General → Login Items & Extensions → Finder."
-      - name: Calculate release checksum
+          version="${TAG#v}"
+          mkdir -p dist/releases
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "Sorting-Hat-$TAG.zip" \
+            --dir dist/releases
+      - name: Verify the exact published artifact
         id: release
+        env:
+          TAG: ${{ github.event.release.tag_name }}
         run: |
-          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          echo "sha256=$(shasum -a 256 "Sorting-Hat-${GITHUB_REF_NAME}.zip" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          version="${TAG#v}"
+          archive="dist/releases/Sorting-Hat-$TAG.zip"
+          ./script/verify_release_archive.sh "$archive" "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(shasum -a 256 "$archive" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Check out Homebrew tap
         uses: actions/checkout@v4
         with:
           repository: tcballard/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
-      - name: Update Homebrew cask
+      - name: Update Homebrew cask from the verified archive
         working-directory: homebrew-tap
         env:
           VERSION: ${{ steps.release.outputs.version }}
           SHA256: ${{ steps.release.outputs.sha256 }}
         run: |
+          test -n "$VERSION"
+          test -n "$SHA256"
           sed -i '' -E "s/version \"[^\"]+\"/version \"$VERSION\"/" Casks/sorting-hat.rb
           sed -i '' -E "s/sha256 \"[^\"]+\"/sha256 \"$SHA256\"/" Casks/sorting-hat.rb
           git config user.name "github-actions[bot]"

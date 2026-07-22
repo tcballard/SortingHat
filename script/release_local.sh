@@ -17,7 +17,6 @@ APP="$ROOT_DIR/dist/Sorting Hat.app"
 EXTENSION="$APP/Contents/PlugIns/Send to Sorting Hat.appex"
 ARCHIVE="$OUTPUT_DIR/Sorting-Hat-v$VERSION.zip"
 SUBMISSION="${TMPDIR%/}/Sorting-Hat-v$VERSION-notarization.zip"
-VERIFY_ROOT="${TMPDIR%/}/Sorting-Hat-v$VERSION-verification"
 IDENTITY="Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
 
 NOTARY_ARGS=()
@@ -32,7 +31,7 @@ else
 fi
 
 mkdir -p "$OUTPUT_DIR"
-rm -rf "$DERIVED_DATA" "$VERIFY_ROOT"
+rm -rf "$DERIVED_DATA"
 rm -f "$ARCHIVE" "$SUBMISSION"
 
 if ! security find-identity -v -p codesigning | grep -Fq "\"$IDENTITY\""; then
@@ -61,19 +60,7 @@ xcrun stapler validate "$APP"
 spctl --assess --type execute --verbose=2 "$APP"
 
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
-mkdir -p "$VERIFY_ROOT"
-ditto -x -k "$ARCHIVE" "$VERIFY_ROOT"
-FINAL_APP="$VERIFY_ROOT/Sorting Hat.app"
-FINAL_EXTENSION="$FINAL_APP/Contents/PlugIns/Send to Sorting Hat.appex"
-codesign --verify --strict --verbose=2 "$FINAL_EXTENSION"
-codesign --verify --deep --strict --verbose=2 "$FINAL_APP"
-xcrun stapler validate "$FINAL_APP"
-spctl --assess --type execute --verbose=2 "$FINAL_APP"
-test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$FINAL_APP/Contents/Info.plist")" = "$CONTRACT_VERSION"
-test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$FINAL_APP/Contents/Info.plist")" = "$CONTRACT_BUILD"
-test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$FINAL_EXTENSION/Contents/Info.plist")" = "$CONTRACT_VERSION"
-test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$FINAL_EXTENSION/Contents/Info.plist")" = "$CONTRACT_BUILD"
+"$ROOT_DIR/script/verify_release_archive.sh" "$ARCHIVE" "$CONTRACT_VERSION" "$CONTRACT_BUILD"
 
 echo "Signed, notarized, stapled, and extracted-archive verified for $CONTRACT_VERSION ($CONTRACT_BUILD):"
 echo "$ARCHIVE"
-shasum -a 256 "$ARCHIVE"
