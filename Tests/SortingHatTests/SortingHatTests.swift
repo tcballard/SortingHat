@@ -6,6 +6,7 @@ import CoreText
 import FoundationModels
 import Testing
 @testable import SortingHatCore
+@testable import SortingHatFMResearch
 @testable import SortingHatFinderAdapter
 
 struct StubAnalyzer: FileAnalyzing {
@@ -531,6 +532,20 @@ struct SortingHatTests {
         #expect(!PreferredAnalyzer.shouldEscalateToPCC(after: HatError.contentExtractionFailed("unreadable")))
         #expect(!PreferredAnalyzer.shouldEscalateToPCC(after: HatError.invalidDecision("unsafe result")))
         #expect(!PreferredAnalyzer.shouldEscalateToPCC(after: HatError.unsafePath("../escape")))
+    }
+
+    @Test func shippingAnalyzerFailsClosedWhenPCCResearchAdapterIsAbsent() {
+        let analyzer = PreferredAnalyzer(
+            ollamaURL: "http://127.0.0.1:11434",
+            ollamaModel: "",
+            provider: .apple,
+            appleModel: .pcc,
+            allowApplePCC: true
+        )
+
+        #expect(throws: HatError.self) {
+            try analyzer.analyze(file: URL(fileURLWithPath: "/tmp/research.txt"), rules: [])
+        }
     }
 
     @Test func distinguishesPrivateCloudUsageLimits() {
@@ -1407,6 +1422,26 @@ struct SortingHatTests {
         #expect(resolvedInbox.standardizedFileURL == inbox.standardizedFileURL)
     }
 
+    @Test func bookmarkStoreKeepsNamedFolderGrantsIndependent() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let accessRoot = root.appending(path: "Folder Access", directoryHint: .isDirectory)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        let output = root.appending(path: "Filed Output", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+
+        let inboxStore = InboxAccessBookmarkStore(root: accessRoot)
+        let outputStore = InboxAccessBookmarkStore(root: accessRoot, name: "Output")
+        try inboxStore.save(inbox)
+        try outputStore.save(output)
+
+        #expect(inboxStore.resolve(expectedInbox: inbox) == .available(inbox.standardizedFileURL))
+        #expect(outputStore.resolve(expectedInbox: output) == .available(output.standardizedFileURL))
+        #expect(inboxStore.resolve(expectedInbox: output).needsRecovery)
+        #expect(outputStore.resolve(expectedInbox: inbox).needsRecovery)
+    }
+
     @Test func decodesTheDataBackedFileURLRepresentationFinderActuallyProvides() throws {
         let source = URL(fileURLWithPath: "/private/tmp/Finder receipt ü.pdf")
 
@@ -1613,5 +1648,35 @@ struct SortingHatTests {
 
         #expect(store.resolve(expectedInbox: configuredInbox) == .mismatched(bookmarked: formerInbox, expected: configuredInbox))
         #expect(store.resolve(expectedInbox: configuredInbox).needsRecovery)
+    }
+
+    @Test func localOnlyPolicyAcceptsOnlyLoopbackOllamaURLs() throws {
+        #expect(LocalOnlyProviderPolicy.isLoopbackOllamaURL("http://127.0.0.1:11434"))
+        #expect(LocalOnlyProviderPolicy.isLoopbackOllamaURL("http://localhost:11434"))
+        #expect(LocalOnlyProviderPolicy.isLoopbackOllamaURL("https://[::1]:11434"))
+        #expect(!LocalOnlyProviderPolicy.isLoopbackOllamaURL("http://192.168.1.10:11434"))
+        #expect(!LocalOnlyProviderPolicy.isLoopbackOllamaURL("https://models.example.com"))
+        #expect(throws: HatError.self) {
+            try LocalOnlyProviderPolicy.validatedOllamaURL("http://models.example.com")
+        }
+    }
+
+    @Test func localOnlyPolicyNeutralizesRemoteAndOpenAIConfiguration() {
+        var config = Configuration()
+        config.ollamaURL = "https://models.example.com"
+        config.ollamaModel = "remote-model"
+        config.openAIModel = "cloud-model"
+        config.modelProvider = .openai
+        config.appleModel = .pcc
+        config.allowApplePCC = true
+
+        let normalized = LocalOnlyProviderPolicy.normalized(config)
+
+        #expect(normalized.ollamaURL == LocalOnlyProviderPolicy.defaultOllamaURL)
+        #expect(normalized.ollamaModel.isEmpty)
+        #expect(normalized.openAIModel.isEmpty)
+        #expect(normalized.modelProvider == .automatic)
+        #expect(normalized.appleModel == .system)
+        #expect(!normalized.allowApplePCC)
     }
 }

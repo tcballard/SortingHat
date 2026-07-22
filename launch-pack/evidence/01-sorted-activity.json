@@ -1,0 +1,29 @@
+{
+  "anchor": "center",
+  "background": "#0B111A",
+  "canvas": [
+    1440,
+    900
+  ],
+  "fit": "contain",
+  "output": "launch-pack/outputs/app-store/screenshots/01-sorted-activity.jpg",
+  "output_bytes": 108269,
+  "output_sha256": "acd7b7fdcdb86e393abf092870991fc7bc287cce1ea092db0ae1ab03c34df90b",
+  "placement": [
+    0,
+    58
+  ],
+  "proportional": true,
+  "scale": 1.022001419446416,
+  "scaled_size": [
+    1440,
+    785
+  ],
+  "source": "/private/tmp/SortingHat-activity-source.jpeg",
+  "source_sha256": "4283b288bc53f4702bf98aa85c7b51ee6d00e67acbc91c324637cea629a5d477",
+  "source_size": [
+    1409,
+    768
+  ],
+  "source_unchanged": true
+}

@@ -1,5 +1,6 @@
 import Foundation
 import SortingHatCore
+import SortingHatFMResearch
 
 @main
 enum SortingHatCLI {
@@ -26,7 +27,9 @@ enum SortingHatCLI {
             let inbox = URL(fileURLWithPath: NSString(string: config.inbox).expandingTildeInPath).standardizedFileURL
             let output = URL(fileURLWithPath: NSString(string: config.output).expandingTildeInPath).standardizedFileURL
             try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
-            let analyzer = PreferredAnalyzer(fmExecutable: fmPath(), ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
+            let pcc = FMAnalyzer(executable: fmPath(), model: .pcc, useCase: config.appleUseCase,
+                                 guardrails: config.appleGuardrails, pccAllowed: config.allowApplePCC)
+            let analyzer = PreferredAnalyzer(pcc: pcc, ollamaURL: config.ollamaURL, ollamaModel: config.ollamaModel,
                                              openAIModel: config.openAIModel, openAIKey: ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "",
                                              provider: config.modelProvider, appleModel: config.appleModel,
                                              appleUseCase: config.appleUseCase, appleGuardrails: config.appleGuardrails,

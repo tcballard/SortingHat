@@ -1,8 +1,5 @@
 import Foundation
-
-public protocol FileAnalyzing: Sendable {
-    func analyze(file: URL, rules: [String]) throws -> Decision
-}
+import SortingHatCore
 
 /// Analyzes files with the on-device Apple Foundation Model exposed by macOS's
 /// `fm` command-line interface.
@@ -270,14 +267,7 @@ public struct FMAnalyzer: FileAnalyzing, BatchFileAnalyzing {
     }
 
     public static func decode(_ data: Data) throws -> Decision {
-        if let decision = try? JSONDecoder().decode(Decision.self, from: data) { return decision }
-        let text = String(data: data, encoding: .utf8) ?? ""
-        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}") else {
-            throw HatError.invalidResponse(text)
-        }
-        let json = Data(text[start...end].utf8)
-        do { return try JSONDecoder().decode(Decision.self, from: json) }
-        catch { throw HatError.invalidResponse(text) }
+        try DecisionJSONDecoder.decode(data)
     }
 
     static func pccError(_ detail: String) -> HatError {

@@ -1,0 +1,29 @@
+{
+  "anchor": "center",
+  "background": "#0B111A",
+  "canvas": [
+    1024,
+    1024
+  ],
+  "fit": "contain",
+  "output": "launch-pack/outputs/app-store/icon/app-icon-1024.png",
+  "output_bytes": 477779,
+  "output_sha256": "eda410b4ddae926bc3740b97bc14937791aec28b913f2c03136054d7e226e8da",
+  "placement": [
+    0,
+    0
+  ],
+  "proportional": true,
+  "scale": 1.0,
+  "scaled_size": [
+    1024,
+    1024
+  ],
+  "source": "Sources/SortingHatApp/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png",
+  "source_sha256": "87091098e947c9a8037319cb7dcf385f15b3bd9392a4acf5a798bc26d8a653f5",
+  "source_size": [
+    1024,
+    1024
+  ],
+  "source_unchanged": true
+}

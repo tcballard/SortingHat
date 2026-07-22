@@ -65,3 +65,8 @@ jobs:
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceRoleType" "$extension_info" | grep -Fx NSExtensionServiceRoleTypeEditor
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionServiceAllowsFinderPreviewItem" "$extension_info" | grep -Fx true
           /usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionAttributes:NSExtensionActivationRule" "$extension_info" | grep -Fx 'SUBQUERY (extensionItems, $extensionItem, SUBQUERY ($extensionItem.attachments, $attachment, ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count == $extensionItem.attachments.@count).@count == 1'
+      - name: Preflight sandboxed Mac App Store archive
+        env:
+          SORTING_HAT_APP_STORE_DERIVED_DATA: ${{ runner.temp }}/SortingHatAppStoreDerivedData
+          SORTING_HAT_APP_STORE_ARCHIVE: ${{ runner.temp }}/SortingHat-AppStore-Preflight.xcarchive
+        run: ./script/preflight_app_store.sh

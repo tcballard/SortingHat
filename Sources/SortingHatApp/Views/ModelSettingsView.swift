@@ -12,7 +12,6 @@ struct ModelSettingsView: View {
     @State private var appleModel: AppleModelSelection = .automatic
     @State private var appleUseCase: AppleUseCase = .general
     @State private var appleGuardrails: AppleGuardrails = .default
-    @State private var allowApplePCC = false
     @State private var errorMessage: String?
     @State private var savedMessage: String?
     @State private var inboxURL: URL
@@ -43,8 +42,10 @@ struct ModelSettingsView: View {
                     .tabItem { Label("Apple", systemImage: "cpu") }
                 localPane
                     .tabItem { Label("Ollama", systemImage: "desktopcomputer") }
+                #if !SORTING_HAT_APP_STORE
                 cloudPane
                     .tabItem { Label("OpenAI", systemImage: "cloud") }
+                #endif
             }
             .padding(16)
 
@@ -74,7 +75,6 @@ struct ModelSettingsView: View {
         .onAppear(perform: load)
         .onChange(of: provider) { savedMessage = nil }
         .onChange(of: appleModel) { savedMessage = nil }
-        .onChange(of: allowApplePCC) { savedMessage = nil }
         .fileImporter(isPresented: $choosingInbox, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { inboxURL = url; saveLocations() }
         }
@@ -141,6 +141,11 @@ struct ModelSettingsView: View {
                 LabeledContent("Filed output") {
                     HStack { Text(outputURL.path(percentEncoded: false)).lineLimit(1).truncationMode(.middle); Button("Choose…") { choosingOutput = true } }
                 }
+                if store.outputAccessState.needsRecovery {
+                    Label(outputAccessDetail, systemImage: "lock.trianglebadge.exclamationmark")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 Toggle("Launch Sorting Hat at login", isOn: Binding(
                     get: { store.launchAtLogin },
                     set: { enabled in store.setLaunchAtLogin(enabled) }
@@ -168,7 +173,9 @@ struct ModelSettingsView: View {
                     Text("Automatic").tag(ModelProvider.automatic)
                     Text("Apple").tag(ModelProvider.apple)
                     Text("Ollama").tag(ModelProvider.ollama)
+                    #if !SORTING_HAT_APP_STORE
                     Text("OpenAI").tag(ModelProvider.openai)
+                    #endif
                 }
                 .pickerStyle(.radioGroup)
             }
@@ -378,16 +385,26 @@ struct ModelSettingsView: View {
         }
     }
 
+    private var outputAccessDetail: String {
+        switch store.outputAccessState {
+        case .available: "Filed-output access is available"
+        case .stale: "Filed-output permission is stale — choose the folder again"
+        case .missing: "Choose the filed-output folder to persist permission"
+        case .invalid(let message): "Filed-output permission needs repair: \(message)"
+        case .mismatched(let bookmarked, let expected):
+            "Saved access points to \(bookmarked.lastPathComponent), not \(expected.lastPathComponent) — choose the filed output again"
+        }
+    }
+
     private var applePane: some View {
         SettingsPane(
             title: "Apple Foundation Models",
-            description: "Use Apple Intelligence on this Mac, or explicitly permit eligible requests to use Private Cloud Compute."
+            description: "Use Apple Intelligence on this Mac. File context stays on this device."
         ) {
             Form {
                 Picker("Model", selection: $appleModel) {
                     Text("Automatic").tag(AppleModelSelection.automatic)
                     Text("On this Mac").tag(AppleModelSelection.system)
-                    Text("Private Cloud Compute").tag(AppleModelSelection.pcc)
                 }
                 Picker("Use case", selection: $appleUseCase) {
                     Text("General").tag(AppleUseCase.general)
@@ -398,27 +415,19 @@ struct ModelSettingsView: View {
                     Text("Permit Content Transformations").tag(AppleGuardrails.permissiveContentTransformations)
                 }
             }
-
-            Divider()
-
-            Toggle("Allow file context to be sent to Apple Private Cloud Compute", isOn: $allowApplePCC)
-            Text(pccHelp)
-                .font(.caption)
-                .foregroundStyle(allowApplePCC ? .orange : .secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
     private var localPane: some View {
         SettingsPane(
             title: "Local Ollama",
-            description: "Connect Sorting Hat to an Ollama model running on this Mac or your local network."
+            description: localProviderDescription
         ) {
             Form {
                 TextField("Server URL", text: $url)
                 TextField("Model", text: $ollamaModel, prompt: Text("For example: gemma3:4b"))
             }
-            Text("Files are sent only to the server address above. Automatic uses Ollama when Apple generation is unavailable.")
+            Text(localProviderFootnote)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -452,7 +461,6 @@ struct ModelSettingsView: View {
             appleModel = settings.appleModel
             appleUseCase = settings.appleUseCase
             appleGuardrails = settings.appleGuardrails
-            allowApplePCC = settings.allowApplePCC
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -466,7 +474,6 @@ struct ModelSettingsView: View {
                 appleModel: appleModel,
                 appleUseCase: appleUseCase,
                 appleGuardrails: appleGuardrails,
-                allowApplePCC: allowApplePCC,
                 url: url,
                 ollamaModel: ollamaModel,
                 openAIModel: openAIModel,
@@ -521,7 +528,7 @@ struct ModelSettingsView: View {
 
     private var providerHelp: String {
         switch provider {
-        case .automatic: "Tries Apple first, then configured Ollama and OpenAI fallbacks. Private Cloud Compute still requires explicit permission."
+        case .automatic: automaticProviderHelp
         case .apple: "Uses only the selected Apple policy. On-device processing remains local."
         case .ollama: "Uses only the configured Ollama server."
         case .openai: "Uses OpenAI directly and may send extracted file context to the service."
@@ -539,22 +546,45 @@ struct ModelSettingsView: View {
 
     private var privacySummary: String {
         switch provider {
-        case .automatic: "Uses on-device Apple Intelligence first. Network providers are used only when configured."
-        case .apple: allowApplePCC ? "Apple processing may use Private Cloud Compute with your permission." : "Apple processing remains on this Mac."
+        case .automatic: automaticPrivacySummary
+        case .apple: "Apple processing remains on this Mac."
         case .ollama: "File context is sent only to the Ollama server address you configure."
         case .openai: "Extracted file context may be sent to OpenAI."
         }
     }
 
-    private var pccHelp: String {
-        if appleModel == .pcc && !allowApplePCC {
-            return "Private Cloud Compute cannot be used until this permission is enabled."
-        }
-        if allowApplePCC {
-            return "Permission is enabled. Automatic may retry eligible on-device failures using Apple's Private Cloud Compute service."
-        }
-        return "Disabled. File context stays on this Mac when using Apple Foundation Models."
+    private var automaticProviderHelp: String {
+        #if SORTING_HAT_APP_STORE
+        "Tries on-device Apple Intelligence first, then Ollama running on this Mac."
+        #else
+        "Tries on-device Apple Intelligence first, then configured Ollama and OpenAI fallbacks."
+        #endif
     }
+
+    private var automaticPrivacySummary: String {
+        #if SORTING_HAT_APP_STORE
+        "File context stays on this Mac. Remote model providers are unavailable."
+        #else
+        "Uses on-device Apple Intelligence first. Network providers are used only when configured."
+        #endif
+    }
+
+    private var localProviderDescription: String {
+        #if SORTING_HAT_APP_STORE
+        "Connect Sorting Hat to Ollama running on this Mac. Remote and local-network servers are unavailable in this build."
+        #else
+        "Connect Sorting Hat to an Ollama model running on this Mac or your local network."
+        #endif
+    }
+
+    private var localProviderFootnote: String {
+        #if SORTING_HAT_APP_STORE
+        "Only localhost, 127.0.0.1, and ::1 are accepted. Automatic uses local Ollama when Apple generation is unavailable."
+        #else
+        "Files are sent only to the server address above. Automatic uses Ollama when Apple generation is unavailable."
+        #endif
+    }
+
 }
 
 private struct SettingsPane<Content: View>: View {

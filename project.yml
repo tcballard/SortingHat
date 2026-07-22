@@ -1,4 +1,8 @@
 name: SortingHat
+configs:
+  Debug: debug
+  Release: release
+  AppStore: release
 options:
   bundleIdPrefix: com.tcballard
   deploymentTarget:
@@ -19,6 +23,8 @@ targets:
     platform: macOS
     sources:
       - Sources/SortingHatApp
+      - path: Configuration/PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       - package: SortingHatPackage
         product: SortingHatCore
@@ -29,19 +35,27 @@ targets:
       properties:
         CFBundleDisplayName: Sorting Hat
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "14.0"
         LSUIElement: true
+        ITSAppUsesNonExemptEncryption: false
         NSHumanReadableCopyright: Copyright © 2026 Tom Ballard. All rights reserved.
         NSPrincipalClass: NSApplication
         SortingHatAppGroupIdentifier: R8HXTBY3NM.com.tcballard.sortinghat
+        SortingHatLocalOnlyDistribution: $(SORTING_HAT_LOCAL_ONLY)
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: Configuration/SortingHatApp.entitlements
         ENABLE_HARDENED_RUNTIME: true
         PRODUCT_BUNDLE_IDENTIFIER: com.tcballard.sortinghat
         PRODUCT_NAME: Sorting Hat
+        SORTING_HAT_LOCAL_ONLY: false
+      configs:
+        AppStore:
+          CODE_SIGN_ENTITLEMENTS: Configuration/SortingHatApp-AppStore.entitlements
+          SORTING_HAT_LOCAL_ONLY: true
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SORTING_HAT_APP_STORE
   SendToSortingHatAction:
     type: app-extension
     platform: macOS
@@ -57,7 +71,7 @@ targets:
       properties:
         CFBundleDisplayName: Send to Sorting Hat
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         NSExtension:
           NSExtensionAttributes:
             # Match the selected files' content types here. The handler loads
@@ -86,3 +100,13 @@ schemes:
         SortingHatApp: all
     run:
       config: Debug
+    archive:
+      config: Release
+  SortingHatAppStore:
+    build:
+      targets:
+        SortingHatApp: all
+    run:
+      config: AppStore
+    archive:
+      config: AppStore

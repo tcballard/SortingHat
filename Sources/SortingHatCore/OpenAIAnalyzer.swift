@@ -39,7 +39,7 @@ public struct OpenAIAnalyzer: FileAnalyzing {
         semaphore.wait()
         let envelope = try JSONDecoder().decode(Response.self, from: try result!.get())
         guard let text = envelope.choices.first?.message.content else { throw HatError.invalidResponse("OpenAI returned no output") }
-        return try FMAnalyzer.decode(Data(text.utf8))
+        return try DecisionJSONDecoder.decode(Data(text.utf8))
     }
 
     private struct Response: Decodable { let choices: [Choice] }
