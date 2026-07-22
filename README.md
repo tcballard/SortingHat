@@ -12,65 +12,44 @@ Build and run from source:
 ./script/build_and_run.sh
 ```
 
-[See exactly how the product extends Apple’s WWDC26 file-sorting demo, including the passing shipping-path benchmark and its limitations.](docs/wwdc26-comparison.md)
+[See exactly how Sorting Hat extends Apple’s WWDC26 file-sorting demo, including the passing shipping-path benchmark and its limits.](docs/wwdc26-comparison.md)
 
 ## Requirements
 
-- macOS 14 or later for the menu-bar app
-- macOS 26 plus Apple Intelligence for Apple's native on-device Foundation Model, or [Ollama](https://ollama.com/) with a local model on earlier macOS versions
+- macOS 14 or later
+- macOS 26, Apple Intelligence, and a supported Mac for Apple’s on-device Foundation Model
+- [Ollama](https://ollama.com/) with a local model when Apple’s model is unavailable
 - Swift 6.2+ to build from source
-- XcodeGen 2.44.1 to regenerate the checked-in native app project
+- XcodeGen 2.44.1 only when regenerating the checked-in Xcode project
 
-## Try it
+## How it works
 
-```sh
-swift build -c release
-.build/release/sorting-hat init
-mkdir -p ~/SortingHat/Inbox
-.build/release/sorting-hat once --dry-run
-.build/release/sorting-hat watch
-```
+One Inbox. One output root. The model proposes; Swift decides.
 
-## Menu-bar app
+1. Add a file in the app or send it through Finder’s **Send to Sorting Hat** Quick Action.
+2. Sorting Hat extracts useful text, asks the selected model for a filename, tags, and destination, then validates the answer.
+3. Safe decisions move to a rule-specific folder beneath your output root. Missing folders are created automatically.
+4. Uncertain or invalid decisions stay in the Inbox for review. No guessing, no mystery pile called `Sorted` inside the Inbox.
 
-The local and GitHub-packaged app is currently intended for testing. If Gatekeeper blocks the GitHub build, macOS may offer **System Settings → Privacy & Security → Open Anyway**. Only override Gatekeeper if you understand and accept the risk; the Finder Quick Action may produce additional trust prompts. The separately signed Mac App Store build follows Apple's Store trust and sandbox path.
+The Inbox is intake-only. Sorting Hat preserves file extensions, rejects absolute paths and traversal, protects existing files with numbered names, and refuses a “rename” that leaves the original filename unchanged. Controlled `Put ... in ...` rules compile into an allow-list, so free-form model output cannot invent a destination outside the ruleset.
 
-Build and open the native companion with:
+## The Mac app
 
-```sh
-./script/build_and_run.sh
-```
+The dashboard is the single place to see the Inbox, Activity, rules, and anything that needs attention. Left-click the menu-bar hat to open or close the dashboard. Right-click it for quick actions such as pause, resume, and sort now.
 
-### Finder Quick Action
+Sorting Hat watches while it is running, shows exactly how each file was renamed and filed, supports undo and manual recovery, and uses macOS’s native launch-at-login service.
 
-Signed builds include a first-party **Send to Sorting Hat** Finder Quick
-Action. Select files in Finder, then choose **Quick Actions → Send to Sorting
-Hat**. This is copy-only intake: originals stay exactly where they are while
-the extension stages durable copies in Sorting Hat's App Group queue. Running
-apps normally drain that queue within a second; paused apps still import into
-the Inbox but do not sort; closed apps import the staged files on next launch.
-One invocation accepts up to 256 files and loads File Provider items
-sequentially. The Finder transport has a 256 MB per-file limit, a 1 GB
-selection limit, and a 25-second request deadline; anything left unqueued is
-named explicitly as a partial failure and can still be added from inside
-Sorting Hat.
+### Send to Sorting Hat from Finder
 
-Enable the action in **System Settings → General → Login Items & Extensions →
-Finder**. macOS offers no reliable public API for checking whether the action
-is enabled, so confirm the installed build by invoking it from Finder's
-right-click **Quick Actions** menu. Finder can cache extension availability;
-if the newly enabled action is missing, relaunch Finder once before diagnosing
-registration. Older Sorting Hat installs may also have an Automator action
-with the same name that masks the native item. **Sorting Hat Settings →
-Finder** provides a reversible migration path that preserves the workflow as a
-backup until the native delivery is verified. Integration health, Inbox permission
-repair, queued copies, failures, and **Retry** or **Remove** recovery actions
-are available under **Sorting Hat Settings → Finder**. See the [native Finder
-Quick Action architecture and migration notes](docs/finder-quick-action.md).
+Signed builds include a first-party **Send to Sorting Hat** Quick Action. Select files in Finder, then choose **Quick Actions → Send to Sorting Hat**. The action copies each file into Sorting Hat’s App Group queue. It never changes the original.
 
-It watches automatically, shows recent filing activity, opens the Inbox and rules file, can pause or sort immediately, and uses macOS's native launch-at-login service. The dashboard appears at launch and the graduation-cap menu remains available for quick actions.
+Paused apps still import files into the Inbox. Closed apps pick up staged files on the next launch. One invocation accepts up to 256 files, with a 256 MB per-file limit, a 1 GB selection limit, and a 25-second deadline. Partial failures name the files that were not queued instead of pretending the whole batch worked.
 
-Drag files into `~/SortingHat/Inbox`. Keep `sortinghat.conf` in the directory where you launch the command, or pass `--config /path/to/sortinghat.conf`.
+Enable the action in **System Settings → General → Login Items & Extensions → Finder**. If Finder caches the old extension state, relaunch Finder once. **Sorting Hat Settings → Finder** shows integration health, permission repair, queued copies, failures, and **Retry** or **Remove** actions. Older Automator actions with the same name can also be migrated safely. The full contract is in the [Finder Quick Action architecture notes](docs/finder-quick-action.md).
+
+## Rules and configuration
+
+Rules are plain language, editable, and ordered from specific routes to the catch-all:
 
 ```yaml
 inbox: ~/SortingHat/Inbox
@@ -92,21 +71,27 @@ rules:
   - Put everything else in Files/YYYY-MM and add one useful topic tag.
 ```
 
-Choose **Automatic**, **Apple**, **Ollama**, or **OpenAI** under **Model Settings** in source and Developer ID builds. Apple's shipping app integration uses the on-device Foundation Model; automatic provider selection can fall back to configured providers when Apple is unavailable. The Mac App Store build is deliberately local-only: it offers Apple on-device processing and Ollama restricted to loopback addresses on the same Mac, with no OpenAI or remote Ollama route. Content extraction, unsafe paths, and invalid filing decisions never trigger cloud escalation. Private Cloud Compute remains research-only and is not exposed by the shipping app.
+Keep `sortinghat.conf` in the directory where you launch the CLI, or pass `--config /path/to/sortinghat.conf`.
 
-For the on-device system model, `apple_use_case: content-tagging` opts into the Foundation Models framework's content-tagging specialization. `apple_guardrails: permissive-content-transformations` relaxes the system model's content-transformation guardrails for filing material that the default policy refuses; use the default unless your rules require that behavior. These system-only options are omitted from PCC requests. Apple requests use in-process guided generation and greedy sampling. The app stores the OpenAI API key in macOS Keychain; the CLI reads `OPENAI_API_KEY`.
+## Models and privacy
 
-Sorting Hat reads searchable PDFs, plain-text formats, RTF, Word, and OpenDocument files. For scanned PDFs and receipt images, it uses Apple's local Vision framework to recognize text before asking the selected model to name and file the document. Embedded PDF text is preferred, so searchable PDFs avoid unnecessary OCR. Extraction is limited to the first 5 pages and 12,000 characters; the source file is never modified. If a scanned PDF cannot be rendered or contains no sufficiently confident text, Sorting Hat leaves it in the Inbox and reports the extraction failure.
+Source and Developer ID builds offer **Automatic**, **Apple**, **Ollama**, and **OpenAI**. Automatic mode prefers Apple’s in-process Foundation Models framework and can fall back to a provider you configured. OpenAI keys live in macOS Keychain in the app; the CLI reads `OPENAI_API_KEY`.
 
-When Apple's on-device model is selected, each file is analyzed through an isolated native Foundation Models guided-generation request. Every decision is independently validated before any move, and one failed file does not prevent other Inbox items from being processed. Image and scanned-document text is extracted locally with Vision before inference. Sorting Hat deliberately favours reliable per-file naming and review decisions over an unverified native batching throughput claim; the legacy PCC research adapter retains bounded batching.
+The Mac App Store build is stricter. It offers Apple’s on-device model and Ollama only on `localhost`, `127.0.0.1`, or `::1`. It contains no OpenAI route, no LAN or remote Ollama route, and no Private Cloud Compute option. Content-extraction failures, unsafe paths, and invalid decisions never trigger a silent cloud escalation.
 
-The Inbox is intake-only. Sorting Hat renames each file and moves it to a rule-specific folder under `output` (for example, `~/SortingHat/Receipts/2026`). For the rule builder's controlled `Put ... in ...` routes, deterministic Swift code canonicalises the model's proposal against configured destinations and rejects unknown or unresolved folders. When at least one controlled route is present, its compiled destinations form the authoritative allow-list for that ruleset; other prose can still guide naming, tagging, and classification but cannot introduce a new destination. Sorting Hat creates destination folders as needed, rejects absolute paths and traversal, preserves the source file type, protects existing files with numbered names, and writes tags as Finder metadata.
+For Apple’s model, `apple_use_case: content-tagging` enables the framework’s content-tagging specialisation. `apple_guardrails: permissive-content-transformations` relaxes content-transformation guardrails for filing material the default policy refuses; keep the default unless your rules need the exception. Apple requests use in-process guided generation and greedy sampling.
 
-If a model returns the uploaded filename unchanged, Sorting Hat leaves the source in the Inbox and reports an invalid sorting decision instead of silently skipping the requested rename.
+Private Cloud Compute remains a research target for the macOS 27 toolchain. It is not a shipping feature.
 
-If the model cannot classify a file confidently, it can return an empty destination. Sorting Hat treats that as **Needs review** and leaves the source in the Inbox rather than guessing. Automatic provider selection also falls through to a configured Ollama or OpenAI provider when Apple reports the system model as available but generation fails.
+## Documents and OCR
 
-## Commands
+Sorting Hat reads searchable PDFs, plain text, RTF, Word, and OpenDocument files. Apple’s Vision framework extracts text locally from scanned PDFs, receipts, and screenshots before inference. Searchable PDF text wins over OCR, which keeps the common path faster and simpler.
+
+Extraction is capped at the first five pages and 12,000 characters. The source file is never modified during analysis. If a scan cannot be rendered or does not contain confident text, it stays in the Inbox with a visible extraction failure.
+
+Each file gets an isolated model request. One failure does not block the rest of the Inbox. Sorting Hat favours reliable per-file naming and review over an unverified batching speed claim.
+
+## CLI
 
 ```text
 sorting-hat init [--config PATH]
@@ -115,9 +100,21 @@ sorting-hat watch [--config PATH] [--dry-run]
 sorting-hat evaluate --live --corpus PATH --output PATH [--baseline PATH] [--config PATH]
 ```
 
-## Live Foundation Models evaluation
+Build and try the CLI:
 
-Live quality checks are deliberately opt-in and read-only. Create a private, anonymized corpus outside the repository, copy the format in `Tests/SortingHatTests/Fixtures/live-evaluation-corpus.example.json`, then run:
+```sh
+swift build -c release
+.build/release/sorting-hat init
+mkdir -p ~/SortingHat/Inbox
+.build/release/sorting-hat once --dry-run
+.build/release/sorting-hat watch
+```
+
+`watch` uses a small polling loop. That is intentionally boring and reliable for a human-scale drop folder; an event-driven watcher can come later.
+
+## Quality, measured
+
+The live evaluator runs the same extractor, routing policy, and validator as the shipping app without moving source files. Use a private, anonymised corpus outside the repository and copy the schema from `Tests/SortingHatTests/Fixtures/live-evaluation-corpus.example.json`:
 
 ```sh
 .build/debug/sorting-hat evaluate --live \
@@ -126,17 +123,11 @@ Live quality checks are deliberately opt-in and read-only. Create a private, ano
   --config sortinghat.conf
 ```
 
-The manifest is versioned and contains rules plus cases with a relative source path, content kind (`receipt`, `scan`, `screenshot`, `pdf`, `office_document`, or `ambiguous`), accepted folders, required filename terms, required tags, and whether an empty-folder abstention is expected. The checked-in template defines all six required classes but deliberately includes no documents. Corpus files must sit beside or below the manifest; output inside that corpus directory is rejected. System-model evaluation calls the same native Foundation Models analyzer as the app but never calls `Organizer.apply`, so sources are not renamed, tagged, or moved. PCC research retains the command-line adapter until the macOS 27 native PCC API can be compiled and validated with Xcode 27.
+Each run writes `evaluation.json` and `summary.md`, including the raw model proposal, final validated decision, environment, latency, accuracy, failures, invalid decisions, and abstentions. Pass a compatible previous artifact with `--baseline` to expose regressions. Exit status `2` means a quality threshold or baseline check failed; `1` means the evaluation could not run.
 
-Each run writes `evaluation.json` and `summary.md`. In schema-v2 artifacts, `raw_decision` is the model's direct proposal before deterministic routing policy, while `decision` is the resolved and validated shipping-path result that the evaluator scores. The artifact also records model, OS, prompt and routing-policy versions, validation errors, pre-validation decision latency, accuracy, generation failures, unsafe/invalid decisions, and abstentions. Latency stops after analysis and deterministic routing resolution, before the separate `Organizer` validation pass. Pass a schema-compatible previous `evaluation.json` with `--baseline` to expose regressions; incompatible schemas, corpora, prompts, routing policies, or model environments are reported instead of being compared silently. Exit status `2` means a threshold or baseline check failed; `1` means the evaluation could not run. Do not commit corpus documents or results containing private or copyrighted content; only the synthetic manifest example belongs in the repository.
+The completed Issue #23 gate scored 108/108 exact final decisions across nine runs, held all 18 ambiguous cases for review, and produced zero invalid final decisions. It also recorded an 8.1% pre-validation latency increase against the corrected baseline. That is the honest result: routing passed; speed did not improve. Read the method and boundaries in [`evaluation/ROUTING_RESULTS.md`](evaluation/ROUTING_RESULTS.md).
 
-The completed Issue #23 result is published in [`evaluation/ROUTING_RESULTS.md`](evaluation/ROUTING_RESULTS.md): routing policy v1 scored 108/108 exact decisions across nine final runs, with 18/18 ambiguous cases held for review, zero invalid final decisions, and an 8.1% recorded pre-validation latency increase against the corrected shipping-path baseline. The 12-case private corpus is a regression gate, not a universal accuracy claim.
-
-For reproducible prompt, system/content-tagging, and system/PCC research, use the locked standalone Python project in [`evaluation/`](evaluation/README.md). It consumes the same corpus manifest and produces JSON, CSV, Markdown, and chart artifacts without adding Python to the application runtime. The Swift live evaluator remains the product-quality authority because it exercises the shipping extractor, routing policy, and validator.
-
-Bounded tool-calling candidates are also evaluated there under a documented threat model and evidence gate. Filesystem mutation remains exclusively in validated Swift code; no evaluation tool is available to the shipping app unless a future change demonstrates and reviews measurable value first.
-
-`watch` intentionally uses a small polling loop in this first version. It is simple and reliable for a human-scale drop folder; a launch agent and event-driven watcher can come next.
+The 12-case private corpus is a regression gate, not a universal accuracy claim. Do not commit corpus documents or results containing private or copyrighted content. The standalone [`evaluation/`](evaluation/README.md) project remains available for prompt, system/content-tagging, PCC research, and bounded tool-calling experiments; none of those research tools can mutate the shipping filesystem path.
 
 ## Development
 
@@ -148,12 +139,13 @@ swift test
 ./script/release_local.sh 0.2.0
 ```
 
-Inference is behind `FileAnalyzing`, so filesystem behavior and safety can be tested without a model. Provider selection prefers Apple's in-process Foundation Models framework when available and otherwise uses the configured local Ollama endpoint.
+Inference sits behind `FileAnalyzing`, so filesystem safety can be tested without a live model. The Foundation Models decision path can also be shared by a future iPhone or iPad client, but iOS cannot behave like a continuously watched Mac folder. The [iOS client boundary](docs/ios-client-architecture.md) documents what is reusable and what needs a Files or Share-extension workflow.
 
-The Foundation Models decision path can be shared by a future iPhone or iPad client, but iOS intake cannot behave like a continuously watched Mac folder. See the explicit [iOS client boundary](docs/ios-client-architecture.md) for the reusable layers and the required Files/Share-extension architecture.
+## Distribution status
 
-## Release status
+There are two release tracks. They are deliberately separate.
 
-Release archives are currently ad-hoc signed and published as GitHub pre-releases. Before treating Sorting Hat as production-ready, releases must be signed with a **Developer ID Application** certificate using the hardened runtime, submitted to Apple for notarization, stapled, and validated with Gatekeeper. See [Apple's Gatekeeper guidance](https://support.apple.com/en-gb/102445) and [Apple's notarization documentation](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+- **Mac App Store:** local-only build `0.1.0 (2)` passed Apple validation, processed as `VALID`, and is selected in App Store Connect. It has not been submitted for review or published. Pricing, App Privacy, export compliance, content rights, and installed-build verification still need owner sign-off.
+- **GitHub and Homebrew:** the downloadable `v0.1.0` artifact is an experimental, ad-hoc-signed pre-release. It is not Developer ID signed or notarised, so Gatekeeper may block it. Issue [#24](https://github.com/tcballard/SortingHat/issues/24) tracks the signed and notarised release path.
 
-Developer ID/Homebrew and Mac App Store are separate tracked channels. App Store Connect build **0.1.0 (1)** has been uploaded and is selectable; product-page metadata, privacy declarations, review submission, and installed-build verification remain. The GitHub pre-release is still an ad-hoc-signed experimental artifact and is not equivalent to the Store build. See the [distribution guide](docs/distribution.md), [Issue #24](https://github.com/tcballard/SortingHat/issues/24), and [Issue #29](https://github.com/tcballard/SortingHat/issues/29).
+Issue [#29](https://github.com/tcballard/SortingHat/issues/29) tracks the remaining App Store work. The [distribution guide](docs/distribution.md), [privacy policy](docs/privacy.md), and [support page](docs/support.md) hold the channel-specific details.
