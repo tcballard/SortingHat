@@ -30,6 +30,8 @@ jobs:
             SortingHat.xcodeproj \
             Configuration/SortingHatApp-Info.plist \
             Configuration/SendToSortingHatAction-Info.plist
+      - name: Verify tag matches the shared release identity
+        run: ./script/release_identity.sh --verify "${GITHUB_REF_NAME#v}"
       - name: Import Developer ID certificate
         env:
           CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_APPLICATION_P12 }}
@@ -59,6 +61,8 @@ jobs:
           extension="dist/Sorting Hat.app/Contents/PlugIns/Send to Sorting Hat.appex"
           app_info="$app/Contents/Info.plist"
           extension_info="$extension/Contents/Info.plist"
+          version="$(./script/release_identity.sh --version)"
+          build="$(./script/release_identity.sh --build)"
           test -d "$extension"
           codesign --verify --strict --deep --verbose=2 "$extension"
           codesign --verify --strict --deep --verbose=2 "$app"
@@ -68,6 +72,10 @@ jobs:
           codesign -dvvv "$app" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM"
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_info" | grep -Fx com.tcballard.sortinghat
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$extension_info" | grep -Fx com.tcballard.sortinghat.finder-action
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app_info" | grep -Fx "$version"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$app_info" | grep -Fx "$build"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$extension_info" | grep -Fx "$version"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$extension_info" | grep -Fx "$build"
           codesign -d --entitlements :- "$extension" > "$RUNNER_TEMP/extension-entitlements.plist" 2>/dev/null
           codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/app-entitlements.plist" 2>/dev/null
           /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups:0" "$RUNNER_TEMP/extension-entitlements.plist" | grep -Fx R8HXTBY3NM.com.tcballard.sortinghat
@@ -109,6 +117,8 @@ jobs:
           extension_info="$extension/Contents/Info.plist"
           app_entitlements="$RUNNER_TEMP/final-app-entitlements.plist"
           extension_entitlements="$RUNNER_TEMP/final-extension-entitlements.plist"
+          version="$(./script/release_identity.sh --version)"
+          build="$(./script/release_identity.sh --build)"
 
           test -f "$archive"
           rm -rf "$verification_root"
@@ -128,6 +138,10 @@ jobs:
 
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app_info" | grep -Fx com.tcballard.sortinghat
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$extension_info" | grep -Fx com.tcballard.sortinghat.finder-action
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$app_info" | grep -Fx "$version"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$app_info" | grep -Fx "$build"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$extension_info" | grep -Fx "$version"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$extension_info" | grep -Fx "$build"
 
           codesign -d --entitlements :- "$app" > "$app_entitlements" 2>/dev/null
           codesign -d --entitlements :- "$extension" > "$extension_entitlements" 2>/dev/null

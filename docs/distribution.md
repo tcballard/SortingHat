@@ -1,7 +1,21 @@
 # Distribution channels
 
-Sorting Hat is preparing two macOS distribution channels. They share the same
-product code but have different signing and sandbox contracts.
+Sorting Hat has one release train and two signed macOS delivery channels. Every
+candidate is built from one source commit with the same marketing version and
+build number from `Configuration/Release.xcconfig`. The channels retain the
+different signing, sandbox, and provider contracts required by their delivery
+mechanisms.
+
+Run the complete local candidate gate with:
+
+```sh
+./script/release_candidate.sh
+```
+
+It tests the code, rejects generated-project or version drift, builds and
+verifies the Developer ID ZIP, builds and verifies the Apple Distribution
+archive and package, and records their checksums and source commit in one
+manifest. It does not tag, publish, upload, or submit either artifact.
 
 ## Developer ID and Homebrew — Issue #24
 
@@ -15,9 +29,9 @@ The tag-triggered release workflow already fails closed while it:
 5. extracts and re-verifies the final ZIP before publishing it;
 6. updates the Homebrew cask with the final archive checksum.
 
-The repository currently lacks the credential secrets required to exercise that
-workflow. Add these through GitHub repository secrets, never through source,
-issues, workflow logs, or pull requests:
+The GitHub workflow expects these repository secrets. Store them only as
+GitHub repository secrets, never in source, issues, workflow logs, or pull
+requests:
 
 - `DEVELOPER_ID_APPLICATION_P12`
 - `DEVELOPER_ID_APPLICATION_PASSWORD`
@@ -38,16 +52,20 @@ xcrun notarytool store-credentials SortingHat-Notary \
   --team-id R8HXTBY3NM
 ```
 
-Then produce and verify a local release candidate with:
+Then produce and verify only the Developer ID channel with:
 
 ```sh
-./script/release_local.sh 0.2.0
+./script/release_local.sh
 ```
 
 The script requires the real Developer ID identity, submits through the named
 Keychain profile, staples and assesses the app, creates the final ZIP, extracts
 that ZIP, and repeats signature, stapler, and Gatekeeper validation against the
 actual distributable artifact. It does not tag, publish, or update Homebrew.
+The script also accepts an App Store Connect API key through the
+`SORTING_HAT_NOTARY_KEY_PATH`, `SORTING_HAT_NOTARY_KEY_ID`, and
+`SORTING_HAT_NOTARY_ISSUER_ID` environment variables instead of a Keychain
+profile. Credentials are never read from the repository.
 
 ## Mac App Store — Issue #29
 
@@ -78,13 +96,17 @@ verifies the nested extension and privacy manifest, confirms that the legacy
 entitlement inspection, and checks the minimum sandbox contract. It does not
 produce an uploadable archive.
 
-To create a submission build, the owner must first register both bundle IDs and
-the App Group in the Apple Developer portal, attach the App Group to both IDs,
-install or allow Xcode to obtain matching Mac App Store profiles, and create an
-App Store Connect record for `com.tcballard.sortinghat`. Then archive the
-`SortingHatAppStore` scheme in Xcode and choose **Distribute App → App Store
-Connect**, or export a correctly signed archive with
-`Configuration/AppStoreExportOptions.plist`.
+Create and verify the Apple Distribution archive and upload package with:
+
+```sh
+./script/archive_app_store.sh
+```
+
+The script uses Xcode's installed account by default. For API-key authentication,
+set `SORTING_HAT_ASC_KEY_PATH`, `SORTING_HAT_ASC_KEY_ID`, and
+`SORTING_HAT_ASC_ISSUER_ID` together. It archives the `SortingHatAppStore`
+scheme, checks the nested signatures and shared release identity, and exports
+with `Configuration/AppStoreExportOptions.plist`. It does not upload or submit.
 
 App Store Connect build **0.1.0 (2)** passed Apple validation, processed as
 `VALID`, and is selected for version 0.1.0. The listing, screenshots,

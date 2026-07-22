@@ -3,6 +3,10 @@ configs:
   Debug: debug
   Release: release
   AppStore: release
+configFiles:
+  Debug: Configuration/Release.xcconfig
+  Release: Configuration/Release.xcconfig
+  AppStore: Configuration/Release.xcconfig
 options:
   bundleIdPrefix: com.tcballard
   deploymentTarget:
@@ -34,8 +38,8 @@ targets:
       path: Configuration/SortingHatApp-Info.plist
       properties:
         CFBundleDisplayName: Sorting Hat
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "14.0"
         LSUIElement: true
@@ -70,8 +74,8 @@ targets:
       path: Configuration/SendToSortingHatAction-Info.plist
       properties:
         CFBundleDisplayName: Send to Sorting Hat
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "2"
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionAttributes:
             # Match the selected files' content types here. The handler loads
