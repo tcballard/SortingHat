@@ -207,57 +207,67 @@ struct DashboardView: View {
                 reviewRules: { openWindow(id: "rules") }
             )
         } else {
-            VSplitView {
-                Table(store.recent, selection: $selection) {
-                    TableColumn("Status") { activity in
-                        Label(activity.outcome.rawValue, systemImage: activity.outcome.symbol)
-                            .foregroundStyle(color(for: activity.outcome))
-                            .labelStyle(.titleAndIcon)
-                    }
-                    .width(min: 96, ideal: 112, max: 132)
+            GeometryReader { geometry in
+                VStack(spacing: 0) {
+                    Table(store.recent, selection: $selection) {
+                        TableColumn("Status") { activity in
+                            Label(activity.outcome.rawValue, systemImage: activity.outcome.symbol)
+                                .foregroundStyle(color(for: activity.outcome))
+                                .labelStyle(.titleAndIcon)
+                        }
+                        .width(min: 96, ideal: 112, max: 132)
 
-                    TableColumn("Original") { activity in
-                        Text(activity.sourceName).lineLimit(1).help(activity.sourceName)
-                    }
-                    .width(min: 130, ideal: 190)
+                        TableColumn("Original") { activity in
+                            Text(activity.sourceName).lineLimit(1).help(activity.sourceName)
+                        }
+                        .width(min: 130, ideal: 190)
 
-                    TableColumn("Filed As") { activity in
-                        Text(activity.filedName ?? "—")
-                            .lineLimit(1)
-                            .foregroundStyle(activity.filedName == nil ? .secondary : .primary)
-                            .help(activity.filedName ?? "Not filed")
-                    }
-                    .width(min: 130, ideal: 190)
+                        TableColumn("Filed As") { activity in
+                            Text(activity.filedName ?? "—")
+                                .lineLimit(1)
+                                .foregroundStyle(activity.filedName == nil ? .secondary : .primary)
+                                .help(activity.filedName ?? "Not filed")
+                        }
+                        .width(min: 130, ideal: 190)
 
-                    TableColumn("Destination") { activity in
-                        Text(activity.destination ?? "Inbox")
-                            .lineLimit(1)
-                            .help(activity.destination ?? "Remains in Inbox")
-                    }
-                    .width(min: 150, ideal: 230)
+                        TableColumn("Destination") { activity in
+                            Text(activity.destination ?? "Inbox")
+                                .lineLimit(1)
+                                .help(activity.destination ?? "Remains in Inbox")
+                        }
+                        .width(min: 150, ideal: 230)
 
-                    TableColumn("When") { activity in
-                        Text(activity.date, style: .time).monospacedDigit()
+                        TableColumn("When") { activity in
+                            Text(activity.date, style: .time).monospacedDigit()
+                        }
+                        .width(72)
                     }
-                    .width(72)
+                    .frame(height: ActivityPaneMetrics.tableHeight(
+                        itemCount: store.recent.count,
+                        availableHeight: geometry.size.height
+                    ))
+                    .accessibilityLabel("Recent filing activity")
+                    .contextMenu(forSelectionType: Activity.ID.self) { selectedIDs in
+                        if let activity = store.recent.first(where: { selectedIDs.contains($0.id) }) {
+                            activityContextMenu(for: activity)
+                        }
+                    }
+
+                    Divider()
+
+                    ActivityDetailView(
+                        activity: selectedActivity ?? store.recent.first!,
+                        store: store,
+                        differentiateWithoutColor: differentiateWithoutColor,
+                        reduceMotion: reduceMotion,
+                        retry: retry,
+                        resolveManually: resolveManually,
+                        removeFromActivity: removeFromActivity
+                    )
+                    .frame(height: ActivityPaneMetrics.detailHeight, alignment: .top)
+
+                    Spacer(minLength: 0)
                 }
-                .accessibilityLabel("Recent filing activity")
-                .contextMenu(forSelectionType: Activity.ID.self) { selectedIDs in
-                    if let activity = store.recent.first(where: { selectedIDs.contains($0.id) }) {
-                        activityContextMenu(for: activity)
-                    }
-                }
-
-                ActivityDetailView(
-                    activity: selectedActivity ?? store.recent.first!,
-                    store: store,
-                    differentiateWithoutColor: differentiateWithoutColor,
-                    reduceMotion: reduceMotion,
-                    retry: retry,
-                    resolveManually: resolveManually,
-                    removeFromActivity: removeFromActivity
-                )
-                    .frame(minHeight: 118, idealHeight: 142, maxHeight: 190)
             }
         }
     }
@@ -314,6 +324,19 @@ struct DashboardView: View {
 }
 
 private enum DashboardSection: Hashable { case inbox, activity }
+
+private enum ActivityPaneMetrics {
+    static let detailHeight: CGFloat = 154
+    private static let headerHeight: CGFloat = 31
+    private static let rowHeight: CGFloat = 30
+    private static let minimumTableHeight = headerHeight + rowHeight
+
+    static func tableHeight(itemCount: Int, availableHeight: CGFloat) -> CGFloat {
+        let maximumHeight = max(minimumTableHeight, availableHeight - detailHeight)
+        let fittedHeight = headerHeight + (CGFloat(itemCount) * rowHeight)
+        return min(maximumHeight, max(minimumTableHeight, fittedHeight))
+    }
+}
 
 private struct DashboardSectionButton: View {
     let title: String
