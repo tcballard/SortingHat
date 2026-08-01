@@ -72,6 +72,35 @@ fi
 sign_nested_code() {
   local bundle="$1"
   local candidate
+  # Sparkle ships its helpers ad-hoc signed. Re-sign complete nested bundles
+  # before their containing framework. Sparkle requires only Downloader.xpc
+  # to retain its shipped entitlements during manual distribution signing.
+  while IFS= read -r -d '' candidate; do
+    if [[ "$candidate" == */Downloader.xpc ]]; then
+      /usr/bin/codesign \
+        --force \
+        --sign "$SIGN_IDENTITY" \
+        "${SIGN_TIMESTAMP[@]}" \
+        --options runtime \
+        --preserve-metadata=entitlements \
+        "$candidate"
+    else
+      /usr/bin/codesign \
+        --force \
+        --sign "$SIGN_IDENTITY" \
+        "${SIGN_TIMESTAMP[@]}" \
+        --options runtime \
+        "$candidate"
+    fi
+  done < <(/usr/bin/find "$bundle/Contents/Frameworks" -depth -type d \( -name '*.app' -o -name '*.xpc' \) -print0 2>/dev/null || true)
+  while IFS= read -r -d '' candidate; do
+    /usr/bin/codesign \
+      --force \
+      --sign "$SIGN_IDENTITY" \
+      "${SIGN_TIMESTAMP[@]}" \
+      --options runtime \
+      "$candidate"
+  done < <(/usr/bin/find "$bundle/Contents/Frameworks" -type f -name Autoupdate -print0 2>/dev/null || true)
   while IFS= read -r -d '' candidate; do
     /usr/bin/codesign --force --sign "$SIGN_IDENTITY" "${SIGN_TIMESTAMP[@]}" --options runtime "$candidate"
   done < <(/usr/bin/find "$bundle/Contents/MacOS" -type f -name '*.dylib' -print0 2>/dev/null || true)
@@ -113,9 +142,27 @@ verify_product_identity() {
   /usr/bin/grep -Fq "TeamIdentifier=$EXPECTED_TEAM_IDENTIFIER" <<<"$details"
 }
 
+verify_release_timestamp() {
+  local bundle="$1"
+  local details
+  details="$(/usr/bin/codesign -dvvv "$bundle" 2>&1)"
+  /usr/bin/grep -Fq "Timestamp=" <<<"$details"
+}
+
 if [[ "$PRODUCT_SIGNED" == 1 ]]; then
   verify_product_identity "$BUILT_EXTENSION"
   verify_product_identity "$BUILT_APP"
+  if [[ "$CONFIGURATION" == "Release" ]]; then
+    SPARKLE="$BUILT_APP/Contents/Frameworks/Sparkle.framework/Versions/Current"
+    for item in \
+      "$SPARKLE/Autoupdate" \
+      "$SPARKLE/Updater.app" \
+      "$SPARKLE/XPCServices/Downloader.xpc" \
+      "$SPARKLE/XPCServices/Installer.xpc"; do
+      verify_product_identity "$item"
+      verify_release_timestamp "$item"
+    done
+  fi
 fi
 
 rm -rf "$DIST_APP"
