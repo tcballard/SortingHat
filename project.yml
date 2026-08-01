@@ -27,9 +27,12 @@ targets:
     platform: macOS
     sources:
       - Sources/SortingHatApp
+      - Sources/SortingHatSparkleSupport
       - path: Configuration/PrivacyInfo.xcprivacy
         buildPhase: resources
     dependencies:
+      - framework: .build/sparkle/2.9.2/Sparkle.xcframework
+        embed: true
       - package: SortingHatPackage
         product: SortingHatCore
       - target: SendToSortingHatAction
@@ -48,6 +51,8 @@ targets:
         NSPrincipalClass: NSApplication
         SortingHatAppGroupIdentifier: R8HXTBY3NM.com.tcballard.sortinghat
         SortingHatLocalOnlyDistribution: $(SORTING_HAT_LOCAL_ONLY)
+        SUFeedURL: https://github.com/tcballard/SortingHat/releases/latest/download/appcast.xml
+        SUPublicEDKey: $(SORTING_HAT_SPARKLE_PUBLIC_KEY)
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: Configuration/SortingHatApp.entitlements
@@ -55,11 +60,42 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.tcballard.sortinghat
         PRODUCT_NAME: Sorting Hat
         SORTING_HAT_LOCAL_ONLY: false
-      configs:
-        AppStore:
-          CODE_SIGN_ENTITLEMENTS: Configuration/SortingHatApp-AppStore.entitlements
-          SORTING_HAT_LOCAL_ONLY: true
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SORTING_HAT_APP_STORE
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SORTING_HAT_SPARKLE
+  SortingHatAppStore:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/SortingHatApp
+      - path: Configuration/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: SortingHatPackage
+        product: SortingHatCore
+      - target: SendToSortingHatAction
+        embed: true
+    info:
+      path: Configuration/SortingHatAppStore-Info.plist
+      properties:
+        CFBundleDisplayName: Sorting Hat
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.productivity
+        LSMinimumSystemVersion: "14.0"
+        LSUIElement: true
+        ITSAppUsesNonExemptEncryption: false
+        NSHumanReadableCopyright: Copyright © 2026 Tom Ballard. All rights reserved.
+        NSPrincipalClass: NSApplication
+        SortingHatAppGroupIdentifier: R8HXTBY3NM.com.tcballard.sortinghat
+        SortingHatLocalOnlyDistribution: $(SORTING_HAT_LOCAL_ONLY)
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: Configuration/SortingHatApp-AppStore.entitlements
+        ENABLE_HARDENED_RUNTIME: true
+        PRODUCT_BUNDLE_IDENTIFIER: com.tcballard.sortinghat
+        PRODUCT_MODULE_NAME: SortingHatApp
+        PRODUCT_NAME: Sorting Hat
+        SORTING_HAT_LOCAL_ONLY: true
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) SORTING_HAT_APP_STORE
   SendToSortingHatAction:
     type: app-extension
     platform: macOS
@@ -109,7 +145,7 @@ schemes:
   SortingHatAppStore:
     build:
       targets:
-        SortingHatApp: all
+        SortingHatAppStore: all
     run:
       config: AppStore
     archive:

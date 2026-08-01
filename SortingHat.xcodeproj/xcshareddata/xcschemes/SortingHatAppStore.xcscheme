@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "106685E210E6813175EC5EB8"
-               BuildableName = "SortingHatApp.app"
-               BlueprintName = "SortingHatApp"
+               BlueprintIdentifier = "764B44AB7F84D0224B11C7E8"
+               BuildableName = "SortingHatAppStore.app"
+               BlueprintName = "SortingHatAppStore"
                ReferencedContainer = "container:SortingHat.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -32,9 +32,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "106685E210E6813175EC5EB8"
-            BuildableName = "SortingHatApp.app"
-            BlueprintName = "SortingHatApp"
+            BlueprintIdentifier = "764B44AB7F84D0224B11C7E8"
+            BuildableName = "SortingHatAppStore.app"
+            BlueprintName = "SortingHatAppStore"
             ReferencedContainer = "container:SortingHat.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -55,9 +55,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "106685E210E6813175EC5EB8"
-            BuildableName = "SortingHatApp.app"
-            BlueprintName = "SortingHatApp"
+            BlueprintIdentifier = "764B44AB7F84D0224B11C7E8"
+            BuildableName = "SortingHatAppStore.app"
+            BlueprintName = "SortingHatAppStore"
             ReferencedContainer = "container:SortingHat.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -74,9 +74,9 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "106685E210E6813175EC5EB8"
-            BuildableName = "SortingHatApp.app"
-            BlueprintName = "SortingHatApp"
+            BlueprintIdentifier = "764B44AB7F84D0224B11C7E8"
+            BuildableName = "SortingHatAppStore.app"
+            BlueprintName = "SortingHatAppStore"
             ReferencedContainer = "container:SortingHat.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

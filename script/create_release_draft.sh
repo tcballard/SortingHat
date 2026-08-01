@@ -6,6 +6,8 @@ VERSION="$($ROOT_DIR/script/release_identity.sh --version)"
 BUILD="$($ROOT_DIR/script/release_identity.sh --build)"
 TAG="v$VERSION"
 ARCHIVE="$ROOT_DIR/dist/releases/Sorting-Hat-$TAG.zip"
+DMG="$ROOT_DIR/dist/releases/Sorting-Hat-$TAG.dmg"
+APPCAST="$ROOT_DIR/dist/releases/appcast.xml"
 CREATE=false
 
 if [[ "${1:-}" == "--create" ]]; then
@@ -37,6 +39,10 @@ fi
 NOTES="$ROOT_DIR/docs/releases/$TAG.md"
 test -f "$NOTES"
 "$ROOT_DIR/script/verify_release_archive.sh" "$ARCHIVE" "$VERSION" "$BUILD"
+"$ROOT_DIR/script/verify_release_dmg.sh" "$DMG" "$VERSION" "$BUILD"
+test -f "$APPCAST"
+grep -Fq "Sorting-Hat-$TAG.dmg" "$APPCAST"
+grep -Fq "sparkle:edSignature=" "$APPCAST"
 gh auth status >/dev/null
 
 if [[ "$CREATE" != true ]]; then
@@ -45,7 +51,7 @@ if [[ "$CREATE" != true ]]; then
   exit 0
 fi
 
-gh release create "$TAG" "$ARCHIVE" \
+gh release create "$TAG" "$ARCHIVE" "$DMG" "$APPCAST" \
   --repo tcballard/SortingHat \
   --target "$(git -C "$ROOT_DIR" rev-parse HEAD)" \
   --draft \

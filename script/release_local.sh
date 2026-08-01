@@ -16,8 +16,21 @@ OUTPUT_DIR="${SORTING_HAT_RELEASE_OUTPUT:-$ROOT_DIR/dist/releases}"
 APP="$ROOT_DIR/dist/Sorting Hat.app"
 EXTENSION="$APP/Contents/PlugIns/Send to Sorting Hat.appex"
 ARCHIVE="$OUTPUT_DIR/Sorting-Hat-v$VERSION.zip"
+DMG="$OUTPUT_DIR/Sorting-Hat-v$VERSION.dmg"
+APPCAST="$OUTPUT_DIR/appcast.xml"
+RELEASE_NOTES="$ROOT_DIR/docs/releases/v$VERSION.md"
 SUBMISSION="${TMPDIR%/}/Sorting-Hat-v$VERSION-notarization.zip"
+DMG_ROOT="$(mktemp -d "${TMPDIR%/}/sorting-hat-dmg.XXXXXX")"
+APPCAST_ROOT="$(mktemp -d "${TMPDIR%/}/sorting-hat-appcast.XXXXXX")"
 IDENTITY="Developer ID Application: Thomas Ballard (R8HXTBY3NM)"
+SPARKLE_ROOT="$ROOT_DIR/.build/sparkle/2.9.2"
+GENERATE_APPCAST="$SPARKLE_ROOT/bin/generate_appcast"
+
+cleanup() {
+  rm -rf "$DMG_ROOT" "$APPCAST_ROOT"
+  rm -f "$SUBMISSION"
+}
+trap cleanup EXIT
 
 NOTARY_ARGS=()
 if [[ -n "$NOTARY_KEY_PATH" || -n "$NOTARY_KEY_ID" || -n "$NOTARY_ISSUER_ID" ]]; then
@@ -32,7 +45,10 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 rm -rf "$DERIVED_DATA"
-rm -f "$ARCHIVE" "$SUBMISSION"
+rm -f "$ARCHIVE" "$DMG" "$APPCAST" "$SUBMISSION"
+"$ROOT_DIR/script/prepare_sparkle.sh"
+test -x "$GENERATE_APPCAST"
+test -f "$RELEASE_NOTES"
 
 if ! security find-identity -v -p codesigning | grep -Fq "\"$IDENTITY\""; then
   echo "Missing valid signing identity: $IDENTITY" >&2
@@ -62,5 +78,31 @@ spctl --assess --type execute --verbose=2 "$APP"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
 "$ROOT_DIR/script/verify_release_archive.sh" "$ARCHIVE" "$CONTRACT_VERSION" "$CONTRACT_BUILD"
 
-echo "Signed, notarized, stapled, and extracted-archive verified for $CONTRACT_VERSION ($CONTRACT_BUILD):"
-echo "$ARCHIVE"
+ditto "$APP" "$DMG_ROOT/Sorting Hat.app"
+ln -s /Applications "$DMG_ROOT/Applications"
+hdiutil create \
+  -volname "Sorting Hat" \
+  -srcfolder "$DMG_ROOT" \
+  -format UDZO \
+  -ov \
+  "$DMG"
+codesign --force --sign "$IDENTITY" --timestamp "$DMG"
+xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait
+xcrun stapler staple "$DMG"
+xcrun stapler validate "$DMG"
+spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
+"$ROOT_DIR/script/verify_release_dmg.sh" "$DMG" "$CONTRACT_VERSION" "$CONTRACT_BUILD"
+
+cp "$DMG" "$APPCAST_ROOT/$(basename "$DMG")"
+cp "$RELEASE_NOTES" "$APPCAST_ROOT/Sorting-Hat-v$VERSION.md"
+"$GENERATE_APPCAST" \
+  --download-url-prefix "https://github.com/tcballard/SortingHat/releases/download/v$VERSION/" \
+  --link "https://oss.tcballard.dev/sortinghat" \
+  --embed-release-notes \
+  "$APPCAST_ROOT"
+cp "$APPCAST_ROOT/appcast.xml" "$APPCAST"
+grep -Fq "Sorting-Hat-v$VERSION.dmg" "$APPCAST"
+grep -Fq "sparkle:edSignature=" "$APPCAST"
+
+echo "Signed, notarized, stapled, and verified for $CONTRACT_VERSION ($CONTRACT_BUILD):"
+printf '%s\n' "$ARCHIVE" "$DMG" "$APPCAST"

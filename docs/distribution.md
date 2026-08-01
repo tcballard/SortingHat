@@ -22,7 +22,7 @@ Distribution private keys remain in the local Keychain, and notarization uses a
 local Keychain profile or App Store Connect API key. GitHub never receives
 those credentials.
 
-The current unified release target is **0.1.1 (3)**. The candidate must come
+The current unified release target is **0.1.1 (7)**. The candidate must come
 from the eventual release commit; the existing GitHub `v0.1.0` artifact and
 App Store Connect build `0.1.0 (2)` remain historical channel artifacts until
 their replacements are independently verified.
@@ -35,9 +35,10 @@ The local release path fails closed while it:
 2. verifies the local Developer ID Application identity;
 3. verifies identities, App Group entitlements, bundle identifiers, and the
    extension contract;
-4. notarizes, staples, and validates with Gatekeeper;
-5. extracts and re-verifies the final ZIP;
-6. creates an owner-reviewable draft GitHub release only when explicitly asked.
+4. notarizes, staples, and validates the app and drag-to-Applications DMG with Gatekeeper;
+5. extracts and re-verifies the final ZIP and mounts and re-verifies the final DMG;
+6. generates an EdDSA-signed Sparkle appcast using the private key in the local Keychain;
+7. creates an owner-reviewable draft GitHub release only when explicitly asked.
 
 After the owner publishes that draft, GitHub downloads and verifies the exact
 locally produced ZIP, then updates the Homebrew cask with its checksum. The
@@ -66,9 +67,9 @@ Then produce and verify only the Developer ID channel with:
 ```
 
 The script requires the real Developer ID identity, submits through the named
-Keychain profile, staples and assesses the app, creates the final ZIP, extracts
-that ZIP, and repeats signature, stapler, and Gatekeeper validation against the
-actual distributable artifact. It does not tag, publish, or update Homebrew.
+Keychain profile, staples and assesses the app, creates the final ZIP and DMG,
+re-verifies both distributables, and generates the signed Sparkle appcast. It
+does not tag, publish, or update Homebrew.
 The script also accepts an App Store Connect API key through the
 `SORTING_HAT_NOTARY_KEY_PATH`, `SORTING_HAT_NOTARY_KEY_ID`, and
 `SORTING_HAT_NOTARY_ISSUER_ID` environment variables instead of a Keychain
@@ -83,8 +84,9 @@ draft release with separate commands:
 ```
 
 The first command is read-only. The second creates a draft GitHub release and
-uploads the verified ZIP; it still does not publish it. Publishing the draft
-triggers GitHub's artifact-verification and Homebrew-update workflow.
+uploads the verified ZIP, DMG, and appcast; it still does not publish it.
+Publishing the draft triggers GitHub's artifact-verification and
+Homebrew-update workflow.
 
 ## Mac App Store — Issue #29
 
@@ -127,9 +129,8 @@ set `SORTING_HAT_ASC_KEY_PATH`, `SORTING_HAT_ASC_KEY_ID`, and
 scheme, checks the nested signatures and shared release identity, and exports
 with `Configuration/AppStoreExportOptions.plist`. It does not upload or submit.
 
-App Store Connect build **0.1.0 (2)** passed Apple validation, processed as
-`VALID`, and remains selected for version 0.1.0. The matching **0.1.1 (3)**
-candidate has not been uploaded. The listing, screenshots,
+App Store Connect has processed prior **0.1.1** builds. The next unified
+candidate is **0.1.1 (7)**. The listing, screenshots,
 categories, age rating, review contact, and review notes are saved. Before
 submission, choose pricing, attest **Data Not Collected**, complete export
 compliance and content rights, and run the installed-build smoke test. The
