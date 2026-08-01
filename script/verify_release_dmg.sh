@@ -37,6 +37,18 @@ test -d "$APP/Contents/Frameworks/Sparkle.framework"
 codesign --verify --strict --verbose=2 "$EXTENSION"
 codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dvvv "$APP" 2>&1 | grep -Fx "Authority=$IDENTITY" >/dev/null
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/Current"
+for item in \
+  "$SPARKLE/Autoupdate" \
+  "$SPARKLE/Updater.app" \
+  "$SPARKLE/XPCServices/Downloader.xpc" \
+  "$SPARKLE/XPCServices/Installer.xpc"; do
+  codesign --verify --strict --verbose=2 "$item"
+  codesign -dvvv "$item" 2>&1 | grep -Fx "Authority=$IDENTITY" >/dev/null
+  codesign -dvvv "$item" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM" >/dev/null
+  details="$(codesign -dvvv "$item" 2>&1)"
+  grep -Fq "Timestamp=" <<<"$details"
+done
 /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INFO" | grep -Fx "$VERSION" >/dev/null
 /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INFO" | grep -Fx "$BUILD" >/dev/null
 /usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$INFO" | grep -Fx "https://github.com/tcballard/SortingHat/releases/latest/download/appcast.xml" >/dev/null

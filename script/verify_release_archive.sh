@@ -37,6 +37,18 @@ codesign -dvvv "$EXTENSION" 2>&1 | grep -Fx "Authority=$IDENTITY" >/dev/null
 codesign -dvvv "$EXTENSION" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM" >/dev/null
 codesign -dvvv "$APP" 2>&1 | grep -Fx "Authority=$IDENTITY" >/dev/null
 codesign -dvvv "$APP" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM" >/dev/null
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/Current"
+for item in \
+  "$SPARKLE/Autoupdate" \
+  "$SPARKLE/Updater.app" \
+  "$SPARKLE/XPCServices/Downloader.xpc" \
+  "$SPARKLE/XPCServices/Installer.xpc"; do
+  codesign --verify --strict --verbose=2 "$item"
+  codesign -dvvv "$item" 2>&1 | grep -Fx "Authority=$IDENTITY" >/dev/null
+  codesign -dvvv "$item" 2>&1 | grep -Fx "TeamIdentifier=R8HXTBY3NM" >/dev/null
+  details="$(codesign -dvvv "$item" 2>&1)"
+  grep -Fq "Timestamp=" <<<"$details"
+done
 xcrun stapler validate "$APP"
 spctl --assess --type execute --verbose=2 "$APP"
 
