@@ -136,8 +136,8 @@ swift test
 ./script/generate_xcode_project.sh
 ./script/preflight_app_store.sh
 # After one-time signing and notarization setup:
-./script/release_candidate.sh 0.1.1 3
-# Verify the notarized ZIP and, only when explicitly intended, create a draft:
+./script/release_candidate.sh 0.1.1 7
+# Verify the notarized ZIP, DMG, and signed Sparkle appcast, then create a draft:
 ./script/create_release_draft.sh
 ./script/create_release_draft.sh --create
 ```
@@ -151,8 +151,8 @@ built from the same source commit and share the version and build number in
 `Configuration/Release.xcconfig`; release tooling rejects a mismatched tag or
 artifact. Their security contracts remain intentionally different.
 
-- **Release target:** `v0.1.1 (3)` is configured as the first unified candidate. Its [release notes](docs/releases/v0.1.1.md) are prepared, but no candidate has been notarised, uploaded, submitted, or published yet. Signing and notarization happen only on the maintainer's Mac; GitHub verifies the published artifact and updates Homebrew without receiving private signing credentials.
-- **Mac App Store:** the earlier local-only build `0.1.0 (2)` passed Apple validation, processed as `VALID`, and remains selected in App Store Connect until the matching `0.1.1 (3)` candidate is uploaded and verified. Nothing has been submitted for review or published. Pricing, App Privacy, export compliance, content rights, and installed-build verification still need owner sign-off.
+- **Release target:** `v0.1.1 (7)` is configured as the first unified candidate. Its [release notes](docs/releases/v0.1.1.md) are prepared, but the Sparkle-enabled Developer ID build has not yet been notarised or published. Signing and notarization happen only on the maintainer's Mac; GitHub receives the finished ZIP, DMG, and signed appcast without receiving private signing credentials.
+- **Mac App Store:** build `0.1.1 (6)` was uploaded previously. The next unified candidate is `0.1.1 (7)`. The Store target deliberately excludes Sparkle and retains its sandboxed provider contract. App Review remains blocked on account support rather than binary production.
 - **GitHub and Homebrew:** the existing downloadable `v0.1.0` artifact predates the unified release tooling and remains an experimental, ad-hoc-signed pre-release. Issue [#24](https://github.com/tcballard/SortingHat/issues/24) tracks replacing it with the signed and notarised `v0.1.1` release.
 
 Issue [#29](https://github.com/tcballard/SortingHat/issues/29) tracks the remaining App Store work. The [distribution guide](docs/distribution.md), [privacy policy](docs/privacy.md), and [support page](docs/support.md) hold the channel-specific details.

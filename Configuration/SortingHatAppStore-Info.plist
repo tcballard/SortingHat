@@ -32,10 +32,6 @@
 	<string>Copyright © 2026 Tom Ballard. All rights reserved.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<key>SUFeedURL</key>
-	<string>https://github.com/tcballard/SortingHat/releases/latest/download/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>$(SORTING_HAT_SPARKLE_PUBLIC_KEY)</string>
 	<key>SortingHatAppGroupIdentifier</key>
 	<string>R8HXTBY3NM.com.tcballard.sortinghat</string>
 	<key>SortingHatLocalOnlyDistribution</key>

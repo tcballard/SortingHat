@@ -19,7 +19,7 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name }}
         run: ./script/release_identity.sh --verify "${TAG#v}"
-      - name: Download the locally produced release archive
+      - name: Download the locally produced release assets
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name }}
@@ -28,7 +28,8 @@ jobs:
           mkdir -p dist/releases
           gh release download "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "Sorting-Hat-$TAG.zip" \
+            --pattern "Sorting-Hat-$TAG.*" \
+            --pattern "appcast.xml" \
             --dir dist/releases
       - name: Verify the exact published artifact
         id: release
@@ -37,7 +38,11 @@ jobs:
         run: |
           version="${TAG#v}"
           archive="dist/releases/Sorting-Hat-$TAG.zip"
+          dmg="dist/releases/Sorting-Hat-$TAG.dmg"
           ./script/verify_release_archive.sh "$archive" "$version"
+          ./script/verify_release_dmg.sh "$dmg" "$version"
+          grep -Fq "Sorting-Hat-$TAG.dmg" dist/releases/appcast.xml
+          grep -Fq "sparkle:edSignature=" dist/releases/appcast.xml
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha256=$(shasum -a 256 "$archive" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Check out Homebrew tap

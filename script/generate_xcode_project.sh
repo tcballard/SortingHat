@@ -15,6 +15,8 @@ if [[ "$ACTUAL_XCODEGEN_VERSION" != "Version: $EXPECTED_XCODEGEN_VERSION" ]]; th
   exit 2
 fi
 
+"$ROOT_DIR/script/prepare_sparkle.sh"
+
 # XcodeGen names local-package navigator references from the checkout's final
 # path component. Generate through a canonical logical root so the checked-in
 # project remains byte-identical in local clones and GitHub Actions checkouts.

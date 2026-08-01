@@ -1,3 +1,6 @@
 // One release identity for every signed Sorting Hat delivery channel.
 MARKETING_VERSION = 0.1.1
-CURRENT_PROJECT_VERSION = 3
+CURRENT_PROJECT_VERSION = 7
+// Public verification key only. Sparkle stores the private signing key in the
+// maintainer's login Keychain and it must never enter source control.
+SORTING_HAT_SPARKLE_PUBLIC_KEY = 9UBmMYEvwtCsr4N/tjAhPwunvqa1nh/ac/UlX1dJcKs=

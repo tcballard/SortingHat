@@ -32,15 +32,28 @@ struct SortingHatMenuApp: App {
             ModelSettingsView(store: store)
         }
 
-        .commands { SortingHatCommands(store: store) }
+        .commands {
+#if SORTING_HAT_SPARKLE
+            SortingHatCommands(store: store, checkForUpdates: { appDelegate.checkForUpdates() })
+#else
+            SortingHatCommands(store: store)
+#endif
+        }
     }
 }
 
 private struct SortingHatCommands: Commands {
     let store: HatStore
+    var checkForUpdates: (() -> Void)? = nil
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        if let checkForUpdates {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…", action: checkForUpdates)
+            }
+        }
+
         CommandGroup(after: .newItem) {
             Button("Show Sorting Rules") { openWindow(id: "rules") }
                 .keyboardShortcut("r", modifiers: [.command, .option])
@@ -75,6 +88,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private weak var store: HatStore?
     private var openWindow: OpenWindowAction?
+#if SORTING_HAT_SPARKLE
+    private let updateController = SortingHatUpdateController()
+#endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -137,6 +153,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(item("Open Inbox", action: #selector(openInboxWindow)))
         menu.addItem(item("Show Sorting Rules", action: #selector(openRulesWindow)))
         menu.addItem(item("Settings…", action: #selector(showSettings), key: ",", modifiers: [.command]))
+#if SORTING_HAT_SPARKLE
+        menu.addItem(item("Check for Updates…", action: #selector(checkForUpdates)))
+#endif
         menu.addItem(.separator())
         menu.addItem(item("Quit Sorting Hat", action: #selector(quit)))
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
@@ -208,5 +227,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+#if SORTING_HAT_SPARKLE
+    @objc func checkForUpdates() { updateController.checkForUpdates() }
+#endif
     @objc private func quit() { NSApp.terminate(nil) }
 }
