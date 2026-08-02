@@ -104,7 +104,8 @@ The complete aggregate record, rejected prompt candidates, excluded infrastructu
 - PCC can improve complex-model capability, but sends supplied context to Apple and has usage limits. Sorting Hat keeps it off until explicitly enabled.
 - Ollama is local but requires a separately installed model. OpenAI is an optional configured cloud fallback and therefore has a different privacy and cost boundary.
 - The published corpus composition and aggregate scores are reproducible; the private source documents and raw outputs are not published.
-- The current release is experimental, ad-hoc signed, and not notarized.
+- The direct release is Developer ID signed, notarized, stapled, and distributed
+  through a DMG, ZIP, Homebrew cask, and signed Sparkle appcast.
 - The WWDC demo is simpler, easier to audit in one screen, and avoids the state, recovery, and configuration burden of a persistent app.
 
 ## Honest conclusion

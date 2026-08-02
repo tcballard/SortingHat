@@ -22,12 +22,12 @@ Distribution private keys remain in the local Keychain, and notarization uses a
 local Keychain profile or App Store Connect API key. GitHub never receives
 those credentials.
 
-The current unified release target is **0.1.1 (7)**. The candidate must come
-from the eventual release commit; the existing GitHub `v0.1.0` artifact and
-App Store Connect build `0.1.0 (2)` remain historical channel artifacts until
-their replacements are independently verified.
+The current direct release is **0.1.1 (7)**, published from commit
+`df111400e66fb68bfd0d6cdd325eaa4e783ced09`. Its Developer ID ZIP and DMG are
+signed, notarized, stapled, and published with a signed Sparkle appcast. The
+Mac App Store remains an independently verified, deferred channel.
 
-## Developer ID and Homebrew — Issue #24
+## Developer ID and Homebrew — Issue #24 complete
 
 The local release path fails closed while it:
 
@@ -40,15 +40,14 @@ The local release path fails closed while it:
 6. generates an EdDSA-signed Sparkle appcast using the private key in the local Keychain;
 7. creates an owner-reviewable draft GitHub release only when explicitly asked.
 
-After the owner publishes that draft, GitHub downloads and verifies the exact
-locally produced ZIP, then updates the Homebrew cask with its checksum. The
-repository needs only:
+After the owner published the v0.1.1 release, GitHub downloaded and verified the
+exact locally produced ZIP, DMG, and appcast, then updated the Homebrew cask
+with the ZIP checksum. The repository needs only:
 
 - `HOMEBREW_TAP_TOKEN`
 
-A successful signed release and a fresh downloaded-artifact verification remain
-required before closing Issue #24. Publishing the GitHub draft is the explicit
-owner gate; there is no tag-triggered cloud signing job.
+Issue #24 is complete. Publishing remains the explicit owner gate for future
+releases; there is no tag-triggered cloud signing job.
 
 The local Mac already has the Developer ID Application identity. Store reusable
 notarization credentials once in the login Keychain (the password is requested
