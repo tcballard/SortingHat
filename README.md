@@ -147,7 +147,7 @@ swift test
 ./script/generate_xcode_project.sh
 ./script/preflight_app_store.sh
 # After one-time signing and notarization setup:
-./script/release_candidate.sh 0.1.1 7
+./script/release_candidate.sh 0.2.0 8
 # Verify the notarized ZIP, DMG, and signed Sparkle appcast, then create a draft:
 ./script/create_release_draft.sh
 ./script/create_release_draft.sh --create
@@ -162,7 +162,7 @@ built from the same source commit and share the version and build number in
 `Configuration/Release.xcconfig`; release tooling rejects a mismatched tag or
 artifact. Their security contracts remain intentionally different.
 
-- **Direct download:** [`v0.1.1 (7)`](https://github.com/tcballard/SortingHat/releases/tag/v0.1.1) is published as a Developer ID-signed, notarized, and stapled DMG and ZIP with a signed Sparkle appcast. Signing and notarization happen only on the maintainer's Mac; GitHub receives the finished artifacts without receiving private signing credentials.
+- **Direct download:** [`v0.2.0 (8)`](https://github.com/tcballard/SortingHat/releases/tag/v0.2.0) is distributed as a Developer ID-signed, notarized, and stapled DMG and ZIP with a signed Sparkle appcast. Signing and notarization happen only on the maintainer's Mac; GitHub receives the finished artifacts without receiving private signing credentials.
 - **GitHub and Homebrew:** the release workflow re-verifies the published ZIP, DMG, and appcast before updating the Homebrew cask from the ZIP checksum. This completes [Issue #24](https://github.com/tcballard/SortingHat/issues/24).
 - **Mac App Store:** the Store target deliberately excludes Sparkle and retains its sandboxed provider contract. Store submission is a separate, deferred channel tracked in [Issue #29](https://github.com/tcballard/SortingHat/issues/29); it does not block the signed direct release.
 
