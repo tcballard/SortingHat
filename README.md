@@ -6,6 +6,10 @@ Sorting Hat is a local-first macOS filing assistant for anyone who wants a clean
 
 ![Sorting Hat showing renamed files and their rule-specific destinations](launch-pack/outputs/app-store/screenshots/01-sorted-activity.jpg)
 
+Download the signed and notarized release from
+[oss.tcballard.dev/sortinghat](https://oss.tcballard.dev/sortinghat), or install
+it with `brew install --cask tcballard/tap/sorting-hat`.
+
 Build and run from source:
 
 ```sh
@@ -151,8 +155,8 @@ built from the same source commit and share the version and build number in
 `Configuration/Release.xcconfig`; release tooling rejects a mismatched tag or
 artifact. Their security contracts remain intentionally different.
 
-- **Release target:** `v0.1.1 (7)` is configured as the first unified candidate. Its [release notes](docs/releases/v0.1.1.md) are prepared, but the Sparkle-enabled Developer ID build has not yet been notarised or published. Signing and notarization happen only on the maintainer's Mac; GitHub receives the finished ZIP, DMG, and signed appcast without receiving private signing credentials.
-- **Mac App Store:** build `0.1.1 (6)` was uploaded previously. The next unified candidate is `0.1.1 (7)`. The Store target deliberately excludes Sparkle and retains its sandboxed provider contract. App Review remains blocked on account support rather than binary production.
-- **GitHub and Homebrew:** the existing downloadable `v0.1.0` artifact predates the unified release tooling and remains an experimental, ad-hoc-signed pre-release. Issue [#24](https://github.com/tcballard/SortingHat/issues/24) tracks replacing it with the signed and notarised `v0.1.1` release.
+- **Direct download:** [`v0.1.1 (7)`](https://github.com/tcballard/SortingHat/releases/tag/v0.1.1) is published as a Developer ID-signed, notarized, and stapled DMG and ZIP with a signed Sparkle appcast. Signing and notarization happen only on the maintainer's Mac; GitHub receives the finished artifacts without receiving private signing credentials.
+- **GitHub and Homebrew:** the release workflow re-verifies the published ZIP, DMG, and appcast before updating the Homebrew cask from the ZIP checksum. This completes [Issue #24](https://github.com/tcballard/SortingHat/issues/24).
+- **Mac App Store:** the Store target deliberately excludes Sparkle and retains its sandboxed provider contract. Store submission is a separate, deferred channel tracked in [Issue #29](https://github.com/tcballard/SortingHat/issues/29); it does not block the signed direct release.
 
 Issue [#29](https://github.com/tcballard/SortingHat/issues/29) tracks the remaining App Store work. The [distribution guide](docs/distribution.md), [privacy policy](docs/privacy.md), and [support page](docs/support.md) hold the channel-specific details.
