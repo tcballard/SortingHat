@@ -2031,4 +2031,101 @@ struct SortingHatTests {
         #expect(normalized.appleModel == .system)
         #expect(!normalized.allowApplePCC)
     }
+
+    @Test func previewUsesShippingPlanWithoutMutatingFilesOrTags() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        let output = root.appending(path: "Filed", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let source = inbox.appending(path: "scan.pdf")
+        try Data("receipt".utf8).write(to: source)
+        let rules = ["Put receipts in Receipts/{merchant}/{year}, and tag them receipt."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let analyzer = StubAnalyzer(decision: Decision(
+            filename: "acorn-books-receipt.pdf",
+            folder: "",
+            tags: ["purchase"],
+            reason: "Receipt from Acorn Books",
+            matchedRuleID: route.id,
+            destinationValues: [
+                DestinationValue(variable: .merchant, value: "Acorn Books"),
+                DestinationValue(variable: .year, value: "2026"),
+            ]
+        ))
+        let organizer = Organizer(inbox: inbox, output: output, rules: rules, analyzer: analyzer)
+
+        let preview = try #require(organizer.previewAll([source]).first)
+        let planned = try organizer.plan(source)
+
+        #expect(preview.status == .ready)
+        #expect(preview.matchedRuleID == route.id)
+        #expect(preview.matchedRuleSubject == "receipts")
+        #expect(preview.renderedFolder == "Receipts/Acorn Books/2026")
+        #expect(preview.destination == planned.destination)
+        #expect(preview.tags == ["purchase", "receipt"])
+        #expect(FileManager.default.fileExists(atPath: source.path))
+        #expect(!FileManager.default.fileExists(atPath: output.path))
+        #expect(getxattr(source.path, "com.apple.metadata:_kMDItemUserTags", nil, 0, 0, 0) == -1)
+    }
+
+    @Test func previewKeepsUnresolvedControlledValuesForReviewWithoutMutation() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        let inbox = root.appending(path: "Inbox", directoryHint: .isDirectory)
+        let output = root.appending(path: "Filed", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        let source = inbox.appending(path: "scan.pdf")
+        try Data("receipt".utf8).write(to: source)
+        let rules = ["Put receipts in Receipts/{merchant}/{year}."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let analyzer = StubAnalyzer(decision: Decision(
+            filename: "receipt.pdf", folder: "", tags: ["receipt"], reason: "Merchant unclear",
+            matchedRuleID: route.id,
+            destinationValues: [DestinationValue(variable: .year, value: "2026")]
+        ))
+
+        let preview = try #require(Organizer(
+            inbox: inbox, output: output, rules: rules, analyzer: analyzer
+        ).previewAll([source]).first)
+
+        #expect(preview.status == .needsReview)
+        #expect(preview.destination == nil)
+        #expect(preview.reason.contains("missing destination value for {merchant}"))
+        #expect(FileManager.default.fileExists(atPath: source.path))
+        #expect(!FileManager.default.fileExists(atPath: output.path))
+    }
+
+    @Test func ruleSetInspectionBlocksDuplicatesConflictsAndUnreachableRoutes() throws {
+        let rules = [
+            "Give every file a descriptive filename.",
+            "Put everything else in Files/YYYY-MM.",
+            "Put receipts in Receipts/{merchant}/{year}.",
+            "Put receipts in Finance/{merchant}/{year}.",
+            "Put screenshots in Screenshots/{vendor}.",
+        ]
+
+        let inspection = RuleSetInspector.inspect(rules)
+
+        #expect(!inspection.canActivate)
+        #expect(inspection.issues.contains { $0.kind == .unreachable && $0.ruleIndex == 2 })
+        #expect(inspection.issues.contains { $0.kind == .conflicting && $0.ruleIndex == 3 })
+        #expect(inspection.issues.contains { $0.kind == .invalid && $0.ruleIndex == 4 })
+        #expect(throws: HatError.self) { try RuleSetInspector.validate(rules) }
+    }
+
+    @Test func ruleSetInspectionAcceptsSpecificRoutesBeforeOneCatchAll() throws {
+        let rules = [
+            "Give every file a descriptive filename.",
+            "Put receipts in Receipts/{merchant}/{year}.",
+            "Put screenshots in Screenshots/{project}/{year-month}.",
+            "Put everything else in Files/YYYY-MM.",
+        ]
+
+        let inspection = RuleSetInspector.inspect(rules)
+
+        #expect(inspection.canActivate)
+        #expect(inspection.descriptors.count == 3)
+        try RuleSetInspector.validate(rules)
+    }
 }

@@ -43,6 +43,8 @@ The dashboard is the single place to see the Inbox, Activity, rules, and anythin
 
 Sorting Hat watches while it is running, shows exactly how each file was renamed and filed, supports undo and manual recovery, and uses macOS’s native launch-at-login service.
 
+Before saving a new ruleset, preview it against up to eight representative files. Preview uses the same extraction, model, compiled routing, collision naming, and validation path as live filing while deliberately skipping every file move and Finder-tag write.
+
 ### Send to Sorting Hat from Finder
 
 Signed builds include a first-party **Send to Sorting Hat** Quick Action. Select files in Finder, then choose **Quick Actions → Send to Sorting Hat**. The action copies each file into Sorting Hat’s App Group queue. It never changes the original.

@@ -36,7 +36,7 @@ public struct Organizer {
 
     public func plan(_ file: URL) throws -> PlannedMove {
         let decision = try analyzer.analyze(file: file, rules: rules)
-        return try plan(file, decision: decision)
+        return try plannedMove(file, decision: resolve(file, decision: decision))
     }
 
     public func resolve(_ file: URL, decision: Decision) throws -> Decision {
@@ -66,7 +66,7 @@ public struct Organizer {
             }
             switch matches[0] {
             case .decision(_, let decision):
-                do { return .success(try plan(input.file, decision: decision)) }
+                do { return .success(try plannedMove(input.file, decision: resolve(input.file, decision: decision))) }
                 catch { return .failure(source: input.file, error: error) }
             case .failure(_, let error):
                 return .failure(source: input.file, error: error)
@@ -74,8 +74,84 @@ public struct Organizer {
         }
     }
 
-    private func plan(_ file: URL, decision: Decision) throws -> PlannedMove {
-        let decision = try resolve(file, decision: decision)
+    /// Runs the shipping analysis, resolver, collision naming, and validator without
+    /// creating folders, moving files, or writing Finder tags.
+    public func previewAll(_ files: [URL]) -> [FilingPreview] {
+        guard let batchAnalyzer = analyzer as? any BatchFileAnalyzing else {
+            return files.map { file in
+                do { return preview(file, decision: try analyzer.analyze(file: file, rules: rules)) }
+                catch { return previewFailure(file: file, decision: nil, error: error) }
+            }
+        }
+
+        let inputs = files.enumerated().map { BatchFileInput(id: "file-\($0.offset + 1)", file: $0.element) }
+        let outcomes = batchAnalyzer.analyzeBatch(files: inputs, rules: rules)
+        let grouped = Dictionary(grouping: outcomes) { outcome in
+            switch outcome {
+            case .decision(let sourceID, _), .failure(let sourceID, _): sourceID
+            }
+        }
+
+        return inputs.map { input in
+            guard let matches = grouped[input.id], matches.count == 1 else {
+                let detail = grouped[input.id] == nil ? "missing result for \(input.id)" : "duplicate results for \(input.id)"
+                return previewFailure(file: input.file, decision: nil, error: HatError.invalidBatch(detail))
+            }
+            switch matches[0] {
+            case .decision(_, let decision): return preview(input.file, decision: decision)
+            case .failure(_, let error): return previewFailure(file: input.file, decision: nil, error: error)
+            }
+        }
+    }
+
+    private func preview(_ file: URL, decision: Decision) -> FilingPreview {
+        do {
+            let resolved = try resolve(file, decision: decision)
+            do {
+                let move = try plannedMove(file, decision: resolved)
+                return FilingPreview(
+                    source: file,
+                    status: .ready,
+                    proposedFilename: move.destination.lastPathComponent,
+                    destination: move.destination,
+                    renderedFolder: resolved.folder,
+                    tags: move.tags,
+                    reason: move.reason,
+                    matchedRuleID: resolved.matchedRuleID,
+                    matchedRuleSubject: matchedRuleSubject(for: resolved.matchedRuleID),
+                    destinationValues: resolved.destinationValues
+                )
+            } catch {
+                return previewFailure(file: file, decision: resolved, error: error)
+            }
+        } catch {
+            return previewFailure(file: file, decision: decision, error: error)
+        }
+    }
+
+    private func previewFailure(file: URL, decision: Decision?, error: Error) -> FilingPreview {
+        let status: FilingPreviewStatus
+        if let hatError = error as? HatError, case .needsReview = hatError { status = .needsReview }
+        else { status = .invalid }
+        return FilingPreview(
+            source: file,
+            status: status,
+            proposedFilename: decision?.filename,
+            renderedFolder: decision?.folder.nilIfEmpty,
+            tags: decision?.tags ?? [],
+            reason: error.localizedDescription,
+            matchedRuleID: decision?.matchedRuleID,
+            matchedRuleSubject: matchedRuleSubject(for: decision?.matchedRuleID),
+            destinationValues: decision?.destinationValues ?? []
+        )
+    }
+
+    private func matchedRuleSubject(for id: String?) -> String? {
+        guard let id else { return nil }
+        return try? RoutingDecisionResolver.descriptors(for: rules).first(where: { $0.id == id })?.subject
+    }
+
+    private func plannedMove(_ file: URL, decision: Decision) throws -> PlannedMove {
         let proposedFolder = decision.folder.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !proposedFolder.isEmpty else {
             throw HatError.needsReview(decision.reason)
@@ -144,4 +220,8 @@ public struct Organizer {
         }
         if result != 0 { throw CocoaError(.fileWriteUnknown) }
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

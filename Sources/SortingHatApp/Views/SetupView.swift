@@ -12,6 +12,8 @@ struct SetupView: View {
     @State private var errorMessage: String?
     @State private var choosingInbox = false
     @State private var choosingOutput = false
+    @State private var choosingPreviewFiles = false
+    @State private var previewRequest: RulePreviewRequest?
 
     init(store: HatStore) {
         self.store = store
@@ -44,6 +46,25 @@ struct SetupView: View {
         }
         .fileImporter(isPresented: $choosingOutput, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { output = url }
+        }
+        .fileImporter(
+            isPresented: $choosingPreviewFiles,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let files):
+                guard !files.isEmpty, files.count <= 8, let plan else {
+                    errorMessage = "Choose between 1 and 8 representative files."
+                    return
+                }
+                previewRequest = RulePreviewRequest(rules: plan.compiledRules, files: files, output: output)
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+        .sheet(item: $previewRequest) { request in
+            RulePreviewSheet(store: store, request: request)
         }
     }
 
@@ -126,6 +147,13 @@ struct SetupView: View {
             .background(.quaternary.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
             Label(plan.fallback, systemImage: "questionmark.folder")
                 .font(.callout).foregroundStyle(.secondary)
+            HStack {
+                Label("Test the plan against real files before starting.", systemImage: "eye")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Preview with Files…") { choosingPreviewFiles = true }
+            }
         }
     }
 
