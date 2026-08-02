@@ -83,7 +83,7 @@ struct RulePlanGenerator: Sendable {
             properties: [
                 .init(name: "name", description: "A short human-readable route name", schema: .init(type: String.self)),
                 .init(name: "fileKinds", description: "The files this route should match", schema: .init(type: String.self)),
-                .init(name: "folderTemplate", description: "A safe relative destination folder; placeholders such as {project} and {year} are allowed", schema: .init(type: String.self)),
+                .init(name: "folderTemplate", description: "A safe relative destination folder using only fixed components or these exact whole-component variables: {merchant}, {client}, {project}, {source-app}, {year}, {month}, {year-month}", schema: .init(type: String.self)),
                 .init(name: "organisation", description: "How matching files should be grouped inside the destination", schema: .init(type: String.self)),
                 .init(name: "tags", description: "A short list of useful Finder tags", schema: .init(arrayOf: .init(type: String.self), maximumElements: 8)),
             ]
@@ -102,6 +102,6 @@ struct RulePlanGenerator: Sendable {
     }()
 
     private static let instructions = """
-    Turn the person's filing preferences into a concise, safe Sorting Hat plan. Every route needs a human-readable name, the kinds of files it matches, a relative destination folder template, an organisation description, and useful Finder tags. Use placeholders such as {project}, {client}, {year}, or {month} when the destination depends on file contents or metadata. Never invent concrete project, client, merchant, or category names. Never output absolute paths, tilde paths, or dot/dot-dot components. Include a short descriptive renaming policy. The fallback must leave uncertain files in the Inbox for review. Do not use a generic Sorted folder.
+    Turn the person's filing preferences into a concise, safe Sorting Hat plan. Every route needs a human-readable name, the kinds of files it matches, a relative destination folder template, an organisation description, and useful Finder tags. A template component may be fixed text or exactly one of {merchant}, {client}, {project}, {source-app}, {year}, {month}, and {year-month}. Do not use any other placeholder or embed a placeholder inside text. Never invent concrete project, client, merchant, or category names. Never output absolute paths, tilde paths, or dot/dot-dot components. Include a short descriptive renaming policy. The fallback must leave uncertain files in the Inbox for review. Do not use a generic Sorted folder.
     """
 }

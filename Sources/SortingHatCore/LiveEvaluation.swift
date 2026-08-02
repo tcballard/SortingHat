@@ -47,6 +47,7 @@ public struct EvaluationConfiguration: Codable, Sendable {
     public let promptVersion: String
     public let operatingSystem: String
     public let routingPolicyVersion: String?
+    public let referenceDate: Date?
 
     public init(
         model: String,
@@ -55,7 +56,8 @@ public struct EvaluationConfiguration: Codable, Sendable {
         pccAllowed: Bool,
         promptVersion: String,
         operatingSystem: String,
-        routingPolicyVersion: String? = nil
+        routingPolicyVersion: String? = nil,
+        referenceDate: Date? = nil
     ) {
         self.model = model
         self.useCase = useCase
@@ -64,6 +66,7 @@ public struct EvaluationConfiguration: Codable, Sendable {
         self.promptVersion = promptVersion
         self.operatingSystem = operatingSystem
         self.routingPolicyVersion = routingPolicyVersion
+        self.referenceDate = referenceDate
     }
 
     enum CodingKeys: String, CodingKey {
@@ -73,6 +76,7 @@ public struct EvaluationConfiguration: Codable, Sendable {
         case promptVersion = "prompt_version"
         case operatingSystem = "operating_system"
         case routingPolicyVersion = "routing_policy_version"
+        case referenceDate = "reference_date"
     }
 }
 
@@ -170,10 +174,11 @@ public enum LiveEvaluator {
         corpusRoot: URL,
         analyzer: any FileAnalyzing,
         configuration: EvaluationConfiguration,
-        baseline: EvaluationArtifact? = nil
+        baseline: EvaluationArtifact? = nil,
+        referenceDate: Date? = nil
     ) -> EvaluationArtifact {
         let root = corpusRoot.standardizedFileURL
-        let referenceDate = Date()
+        let effectiveReferenceDate = referenceDate ?? .now
         let recordedConfiguration = EvaluationConfiguration(
             model: configuration.model,
             useCase: configuration.useCase,
@@ -181,7 +186,8 @@ public enum LiveEvaluator {
             pccAllowed: configuration.pccAllowed,
             promptVersion: configuration.promptVersion,
             operatingSystem: configuration.operatingSystem,
-            routingPolicyVersion: RoutingDecisionResolver.version
+            routingPolicyVersion: RoutingDecisionResolver.version,
+            referenceDate: referenceDate
         )
         let results = manifest.cases.map { item -> EvaluationResult in
             let file = root.appending(path: item.path).standardizedFileURL
@@ -194,7 +200,7 @@ public enum LiveEvaluator {
                     file: file,
                     decision: raw,
                     rules: manifest.rules,
-                    referenceDate: referenceDate
+                    referenceDate: effectiveReferenceDate
                 )
                 let elapsed = milliseconds(since: started)
                 let abstained = decision.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -202,7 +208,7 @@ public enum LiveEvaluator {
                     file: file,
                     decision: decision,
                     rules: manifest.rules,
-                    referenceDate: referenceDate
+                    referenceDate: effectiveReferenceDate
                 )
                 let valid = validationError == nil
                 let folderCorrect = valid && (item.expected.abstain ? abstained : item.expected.folders.contains(decision.folder))
@@ -221,7 +227,7 @@ public enum LiveEvaluator {
             }
         }
         let metrics = metrics(for: results)
-        return EvaluationArtifact(schemaVersion: 2, corpusName: manifest.name, createdAt: referenceDate, configuration: recordedConfiguration,
+        return EvaluationArtifact(schemaVersion: 2, corpusName: manifest.name, createdAt: .now, configuration: recordedConfiguration,
                                   metrics: metrics, results: results,
                                   thresholdFailures: thresholdFailures(metrics, manifest.thresholds),
                                   regressions: regressions(metrics, baseline: baseline, corpusName: manifest.name, configuration: recordedConfiguration))
@@ -246,6 +252,7 @@ public enum LiveEvaluator {
         Model: \(artifact.configuration.model) (\(artifact.configuration.useCase))
         Prompt: \(artifact.configuration.promptVersion)
         Routing policy: \(artifact.configuration.routingPolicyVersion ?? "legacy")
+        Reference date: \(artifact.configuration.referenceDate?.formatted(.iso8601.year().month().day()) ?? "not recorded")
         OS: \(artifact.configuration.operatingSystem)
 
         | Metric | Result |
@@ -328,7 +335,8 @@ public enum LiveEvaluator {
               baselineConfiguration.pccAllowed == configuration.pccAllowed,
               baselineConfiguration.operatingSystem == configuration.operatingSystem,
               baselineConfiguration.promptVersion == configuration.promptVersion,
-              baselineConfiguration.routingPolicyVersion == configuration.routingPolicyVersion else {
+              baselineConfiguration.routingPolicyVersion == configuration.routingPolicyVersion,
+              baselineConfiguration.referenceDate == configuration.referenceDate else {
             return ["baseline evaluation configuration does not match this evaluation"]
         }
 

@@ -60,12 +60,17 @@ The native `sorting-decision-native-v2` path passed the same 12-case private-cor
 - Corpus manifest SHA-256 `ff11e1e1d670e46765f734d27dc5386f8a4d0f92d5e17078b38751275f402fcd`
 - Coverage includes receipts, scan/OCR, screenshots, searchable PDF, office document, ambiguous notes, generic/no-date text, and adversarial prompt-like content
 
+### Reproducing date-based corpus expectations
+
+The corpus was authored for `2026-07-19`. Pinning that reference date keeps both the model prompt and deterministic `YYYY-MM` routing reproducible when the suite is rerun in a later month.
+
 ### Command
 
 ```sh
 .build/debug/sorting-hat evaluate --live \
   --corpus ~/SortingHat-Evaluation/corpus-v2/corpus.json \
   --output ~/SortingHat-Evaluation/results/run-001 \
+  --reference-date 2026-07-19 \
   --config sortinghat.conf
 ```
 

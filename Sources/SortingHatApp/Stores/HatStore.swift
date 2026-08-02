@@ -165,6 +165,7 @@ final class HatStore {
         guard cleaned.allSatisfy({ !$0.contains("\n") && !$0.contains("\r") }) else {
             throw HatError.invalidConfig("each rule must fit on one line")
         }
+        _ = try RoutingDecisionResolver.descriptors(for: cleaned)
         var config = try ConfigLoader.load(configURL)
         config.rules = cleaned
         try ConfigLoader.save(config, to: configURL)

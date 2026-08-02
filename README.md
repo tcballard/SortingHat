@@ -70,10 +70,12 @@ allow_apple_pcc: false
 
 rules:
   - Give every file a short, descriptive, lowercase filename. Use hyphens, never spaces.
-  - Put receipts in Receipts/YYYY and tag them receipt and the merchant name.
-  - Put screenshots in Screenshots/YYYY-MM and tag them screenshot.
+  - Put receipts in Receipts/{merchant}/{year} and tag them receipt and the merchant name.
+  - Put screenshots in Screenshots/{project}/{year-month} and tag them screenshot.
   - Put everything else in Files/YYYY-MM and add one useful topic tag.
 ```
+
+Dynamic destinations use controlled whole-folder components: `{merchant}`, `{client}`, `{project}`, `{source-app}`, `{year}`, `{month}`, and `{year-month}`. Sorting Hat asks the model only to select a compiled rule and identify those values; Swift validates and renders the final path. If a value is missing, uncertain, or looks like a path, the file stays in review. Fixed folders and the original `YYYY` / `YYYY-MM` date templates remain supported.
 
 Keep `sortinghat.conf` in the directory where you launch the CLI, or pass `--config /path/to/sortinghat.conf`.
 
@@ -101,7 +103,7 @@ Each file gets an isolated model request. One failure does not block the rest of
 sorting-hat init [--config PATH]
 sorting-hat once [--config PATH] [--dry-run]
 sorting-hat watch [--config PATH] [--dry-run]
-sorting-hat evaluate --live --corpus PATH --output PATH [--baseline PATH] [--config PATH]
+sorting-hat evaluate --live --corpus PATH --output PATH [--reference-date YYYY-MM-DD] [--baseline PATH] [--config PATH]
 ```
 
 Build and try the CLI:
@@ -124,10 +126,11 @@ The live evaluator runs the same extractor, routing policy, and validator as the
 .build/debug/sorting-hat evaluate --live \
   --corpus ~/SortingHat-Evaluation/corpus/corpus.json \
   --output ~/SortingHat-Evaluation/results/run-001 \
+  --reference-date 2026-07-19 \
   --config sortinghat.conf
 ```
 
-Each run writes `evaluation.json` and `summary.md`, including the raw model proposal, final validated decision, environment, latency, accuracy, failures, invalid decisions, and abstentions. Pass a compatible previous artifact with `--baseline` to expose regressions. Exit status `2` means a quality threshold or baseline check failed; `1` means the evaluation could not run.
+Pin `--reference-date` to the corpus's declared evaluation day so date-based folders and the model prompt remain reproducible across months. Each run records that date and writes `evaluation.json` and `summary.md`, including the raw model proposal, final validated decision, environment, latency, accuracy, failures, invalid decisions, and abstentions. Pass a compatible previous artifact with `--baseline` to expose regressions. Exit status `2` means a quality threshold or baseline check failed; `1` means the evaluation could not run.
 
 The completed Issue #23 gate scored 108/108 exact final decisions across nine runs, held all 18 ambiguous cases for review, and produced zero invalid final decisions. It also recorded an 8.1% pre-validation latency increase against the corrected baseline. That is the honest result: routing passed; speed did not improve. Read the method and boundaries in [`evaluation/ROUTING_RESULTS.md`](evaluation/ROUTING_RESULTS.md).
 

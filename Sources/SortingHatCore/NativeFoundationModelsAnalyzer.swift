@@ -9,13 +9,16 @@ public struct NativeFoundationModelsAnalyzer: FileAnalyzing, BatchFileAnalyzing,
 
     public let useCase: AppleUseCase
     public let guardrails: AppleGuardrails
+    public let referenceDate: Date?
 
     public init(
         useCase: AppleUseCase = .general,
-        guardrails: AppleGuardrails = .default
+        guardrails: AppleGuardrails = .default,
+        referenceDate: Date? = nil
     ) {
         self.useCase = useCase
         self.guardrails = guardrails
+        self.referenceDate = referenceDate
     }
 
     public var isAvailable: Bool {
@@ -69,25 +72,40 @@ public struct NativeFoundationModelsAnalyzer: FileAnalyzing, BatchFileAnalyzing,
     private func analyzeNative(file: URL, rules: [String]) async throws -> Decision {
         let model = model
         guard model.isAvailable else { throw HatError.fmUnavailable }
-        let session = LanguageModelSession(model: model, instructions: Self.instructions)
-        let prompt = try Self.prompt(file: file, rules: rules)
+        let usesControlledDestinations = try RoutingDecisionResolver.descriptors(for: rules)
+            .contains { !$0.variables.isEmpty }
+        let session = LanguageModelSession(
+            model: model,
+            instructions: usesControlledDestinations ? Self.instructions : Self.legacyInstructions
+        )
+        let prompt = try Self.prompt(
+            file: file,
+            rules: rules,
+            structured: usesControlledDestinations,
+            referenceDate: referenceDate ?? .now
+        )
+        let schema = try usesControlledDestinations ? Self.decisionSchema(for: rules) : Self.legacyDecisionSchema
         var lastError: Error?
 
         for attempt in 0..<2 {
             do {
                 let response = try await session.respond(
                     to: attempt == 0 ? prompt : Self.retryPrompt,
-                    schema: Self.decisionSchema,
+                    schema: schema,
                     options: GenerationOptions(sampling: .greedy)
                 )
-                let decision = try Self.decision(from: response.content)
+                let decision = try usesControlledDestinations
+                    ? Self.decision(from: response.content)
+                    : Self.legacyDecision(from: response.content)
                 if Self.requiresRenameCorrection(decision, for: file) {
                     let correction = try await session.respond(
                         to: Self.renameCorrectionPrompt(originalFilename: file.lastPathComponent),
-                        schema: Self.decisionSchema,
+                        schema: schema,
                         options: GenerationOptions(sampling: .greedy)
                     )
-                    return try Self.decision(from: correction.content)
+                    return try usesControlledDestinations
+                        ? Self.decision(from: correction.content)
+                        : Self.legacyDecision(from: correction.content)
                 }
                 return decision
             } catch let error as HatError {
@@ -125,27 +143,84 @@ public struct NativeFoundationModelsAnalyzer: FileAnalyzing, BatchFileAnalyzing,
     }
 
     @available(macOS 26.0, *)
-    private static let decisionSchema: GenerationSchema = {
+    private static func decisionSchema(for rules: [String]) throws -> GenerationSchema {
+        let routeIDs = try RoutingDecisionResolver.descriptors(for: rules).map(\.id)
+        let destinationValue = DynamicGenerationSchema(
+            name: "DestinationValue",
+            description: "One value grounded in the file for a destination variable required by the matched rule",
+            properties: [
+                .init(
+                    name: "variable",
+                    description: "Exactly one required variable name from the matched rule",
+                    schema: .init(name: "DestinationVariable", anyOf: DestinationVariable.allCases.map(\.rawValue))
+                ),
+                .init(name: "value", description: "One safe folder-component value grounded in the file; never a path", schema: .init(type: String.self)),
+            ]
+        )
         let root = DynamicGenerationSchema(
             name: "SortingDecision",
             description: "A safe filing decision for one file",
-            properties: decisionProperties
+            properties: decisionProperties(matchedRuleIDs: routeIDs)
+        )
+        return try GenerationSchema(root: root, dependencies: [destinationValue])
+    }
+
+    @available(macOS 26.0, *)
+    private static let legacyDecisionSchema: GenerationSchema = {
+        let root = DynamicGenerationSchema(
+            name: "SortingDecision",
+            description: "A safe filing decision for one file",
+            properties: [
+                .init(name: "filename", description: "A new, short, content-descriptive filename that differs from the original and preserves its extension", schema: .init(type: String.self)),
+                .init(name: "folder", description: "A safe relative destination folder, or an empty string when evidence is insufficient", schema: .init(type: String.self)),
+                .init(name: "tags", description: "A short list of useful Finder tags", schema: .init(arrayOf: .init(type: String.self), maximumElements: 8)),
+                .init(name: "reason", description: "A concise explanation grounded in the file", schema: .init(type: String.self)),
+            ]
         )
         return try! GenerationSchema(root: root, dependencies: [])
     }()
 
     @available(macOS 26.0, *)
-    private static var decisionProperties: [DynamicGenerationSchema.Property] {
+    private static func decisionProperties(matchedRuleIDs: [String]) -> [DynamicGenerationSchema.Property] {
         [
             .init(name: "filename", description: "A new, short, content-descriptive filename that differs from the original and preserves its extension", schema: .init(type: String.self)),
-            .init(name: "folder", description: "A safe relative destination folder, or an empty string when evidence is insufficient", schema: .init(type: String.self)),
+            .init(name: "folder", description: "For a matched LEGACY_DATE_FOLDER rule, the configured relative folder with its date resolved; otherwise an empty string", schema: .init(type: String.self)),
             .init(name: "tags", description: "A short list of useful Finder tags", schema: .init(arrayOf: .init(type: String.self), maximumElements: 8)),
             .init(name: "reason", description: "A concise explanation grounded in the file", schema: .init(type: String.self)),
+            .init(
+                name: "matchedRuleID",
+                description: "The exact rule ID for the most specific matching Put rule, or an empty string only when the file cannot be identified safely",
+                schema: .init(name: "MatchedRuleID", anyOf: matchedRuleIDs + [""])
+            ),
+            .init(name: "destinationValues", description: "Exactly one grounded value for each required_destination_value of the matched rule, otherwise an empty list", schema: .init(arrayOf: .init(referenceTo: "DestinationValue"), maximumElements: 8)),
         ]
     }
 
     @available(macOS 26.0, *)
     static func decision(from content: GeneratedContent) throws -> Decision {
+        let valueContent = try content.value([GeneratedContent].self, forProperty: "destinationValues")
+        let destinationValues = try valueContent.map { item in
+            let rawVariable = try item.value(String.self, forProperty: "variable")
+            guard let variable = DestinationVariable(rawValue: rawVariable) else {
+                throw HatError.invalidResponse("unsupported destination variable: \(rawVariable)")
+            }
+            return DestinationValue(
+                variable: variable,
+                value: try item.value(String.self, forProperty: "value")
+            )
+        }
+        return Decision(
+            filename: try content.value(String.self, forProperty: "filename"),
+            folder: try content.value(String.self, forProperty: "folder"),
+            tags: try content.value([String].self, forProperty: "tags"),
+            reason: try content.value(String.self, forProperty: "reason"),
+            matchedRuleID: try content.value(String.self, forProperty: "matchedRuleID"),
+            destinationValues: destinationValues
+        )
+    }
+
+    @available(macOS 26.0, *)
+    private static func legacyDecision(from content: GeneratedContent) throws -> Decision {
         Decision(
             filename: try content.value(String.self, forProperty: "filename"),
             folder: try content.value(String.self, forProperty: "folder"),
@@ -154,17 +229,22 @@ public struct NativeFoundationModelsAnalyzer: FileAnalyzing, BatchFileAnalyzing,
         )
     }
 
-    private static func prompt(file: URL, rules: [String]) throws -> String {
+    private static func prompt(
+        file: URL,
+        rules: [String],
+        structured: Bool,
+        referenceDate: Date
+    ) throws -> String {
         var prompt = """
         Organize this file.
 
         Original filename: \(file.lastPathComponent)
         The output filename must not equal the original filename. Describe the file's recognizable subject or purpose instead of copying generic source words or sequence numbers.
 
-        Current date: \(currentDate()). Use dates stated in file content when available. Never invent a document date from the current date or original filename.
+        Current date: \(currentDate(referenceDate)). Use dates stated in file content when available. Never invent a document date from the current date or original filename.
 
         Rules:
-        \(rules.map { "- \($0)" }.joined(separator: "\n"))
+        \(structured ? try RoutingDecisionResolver.modelRules(rules) : rules.map { "- \($0)" }.joined(separator: "\n"))
         """
         if let extraction = try DocumentTextExtractor.extractContent(from: file) {
             prompt += """
@@ -188,6 +268,10 @@ public struct NativeFoundationModelsAnalyzer: FileAnalyzing, BatchFileAnalyzing,
     }
 
     private static let instructions = """
+        You organize one file according to the person's rules. For a filed item, always replace the original filename with a meaningfully different, content-descriptive filename and preserve its extension; never copy the original filename unchanged. Match rules by meaning, not exact wording. Choose the most specific matching Put rule and return its exact RULE_ID. A receipts rule matches recognizable receipts; a screenshots rule matches recognizable screenshots. A CATCH_ALL rule matches every other recognizable file, so never claim that no rule applies when a catch-all is listed. When a matched rule has REQUIRED_DESTINATION_VALUES, return exactly one value for each required variable and only when it is grounded in file content or reliable metadata. A destination value is one folder component, never a path. For LEGACY_DATE_FOLDER yes, return the configured folder with YYYY or YYYY-MM resolved from a date stated in the file, otherwise the current filing date. For all other matched rules, folder is empty because Swift renders the configured template. Choose useful Finder tags and a concise reason. Return empty matchedRuleID, destinationValues, and folder only when the file itself cannot be identified, cannot be renamed meaningfully, or a required destination value is uncertain.
+    """
+
+    private static let legacyInstructions = """
     You organize one file according to the person's rules. For a filed item, always replace the original filename with a meaningfully different, content-descriptive filename and preserve its extension; never copy the original filename unchanged. Choose the most specific rule-matching folder, not a generic Sorted folder. A catch-all destination is only for recognizable content that can be named meaningfully. The folder is relative to the configured output directory. Choose useful Finder tags and a concise reason. Never use an absolute path, a tilde, or dot/dot-dot components. If evidence is insufficient to classify and rename safely, return an empty folder and explain why so the file remains in the Inbox for review.
     """
 
@@ -202,7 +286,9 @@ public struct NativeFoundationModelsAnalyzer: FileAnalyzing, BatchFileAnalyzing,
     }
 
     private static func requiresRenameCorrection(_ decision: Decision, for file: URL) -> Bool {
-        guard !decision.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let hasFilingIntent = decision.matchedRuleID != nil
+            || !decision.folder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard hasFilingIntent else { return false }
         return normalizedFilename(decision.filename) == normalizedFilename(file.lastPathComponent)
     }
 
@@ -213,8 +299,8 @@ public struct NativeFoundationModelsAnalyzer: FileAnalyzing, BatchFileAnalyzing,
         )
     }
 
-    private static func currentDate() -> String {
-        Date.now.formatted(.iso8601.year().month().day())
+    private static func currentDate(_ date: Date) -> String {
+        date.formatted(.iso8601.year().month().day())
     }
 
     private static func hatError(_ error: Error) -> HatError {
