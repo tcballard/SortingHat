@@ -37,7 +37,7 @@ struct CorrectionProposalGenerator: Sendable {
                 let response = try await session.respond(
                     to: prompt + feedback,
                     schema: Self.schema,
-                    options: GenerationOptions(samplingMode: .greedy)
+                    options: GenerationOptions(sampling: .greedy)
                 )
                 let content = response.content
                 let proposal = CorrectionRuleProposal(
@@ -51,7 +51,7 @@ struct CorrectionProposalGenerator: Sendable {
                 try Self.validateReusableDestination(proposal.destinationTemplate)
                 let assessment = RuleProposalPlanner.assess(proposedRule: proposal.ruleText, existingRules: [])
                 guard assessment.canAdd else {
-                    throw RulePlanError.invalid(assessment.issues.map(\.message).joined(separator: " "))
+                    throw RulePlanError.invalid(assessment.issues.map { $0.message }.joined(separator: " "))
                 }
                 return proposal
             } catch {
