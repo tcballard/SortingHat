@@ -19,6 +19,7 @@
 		4613420AE1FFC54EE9B5E854 /* SortingHatFinderAdapter in Frameworks */ = {isa = PBXBuildFile; productRef = 7FA074FE3F35124A742C2767 /* SortingHatFinderAdapter */; };
 		46FB4150E8242BF07A56D09F /* ModelSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D9589A55D599EC62EC61FB /* ModelSettingsView.swift */; };
 		4713A63024C00F015B0B1A9E /* RulesEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF783C14FBCE3B3B969A8140 /* RulesEditorView.swift */; };
+		48E0E24F0F8E56CC0A895839 /* RulePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5877424082F407D420F5A0B0 /* RulePreviewView.swift */; };
 		4A9806D2E0B2AA92546EC5A6 /* HatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0EB807461CD2FBEAC90182D /* HatStore.swift */; };
 		4D6DAE619D65BF73691A3841 /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC8CEA00F91AA384944B6DC1 /* APIKeyStore.swift */; };
 		5DDE652A6495AEDF7070DFE9 /* ActivityLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0581E19BBC86EFF7EC95D2EB /* ActivityLedger.swift */; };
@@ -38,6 +39,7 @@
 		C5B2DB90B8FA1909CD48FA9C /* SortingHatTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 149915F7FA55267F8FBC9713 /* SortingHatTheme.swift */; };
 		C9BE8CC1614093E86050F26D /* SortingHatUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA9D1162A5DD3CA6865A65F3 /* SortingHatUpdateController.swift */; };
 		CD5BCBDFE31FA826097C6016 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 698A482A0EAAA4043EBF9D97 /* DashboardView.swift */; };
+		D74B53C19471B7E723F89DDD /* RulePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5877424082F407D420F5A0B0 /* RulePreviewView.swift */; };
 		D84B9DD6D206F020352BCD4F /* ActivityLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0581E19BBC86EFF7EC95D2EB /* ActivityLedger.swift */; };
 		E19A1580814AC46E0FD700F1 /* SortingHatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47521A9F025FA497A89BCEA8 /* SortingHatApp.swift */; };
 		EBE0940669FF2D55CF7F9BC4 /* Sparkle.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6DB89D36D529A5AFAC90D510 /* Sparkle.xcframework */; };
@@ -109,6 +111,7 @@
 		3B2C203CFB8321153FC8503E /* RulePlanGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulePlanGenerator.swift; sourceTree = "<group>"; };
 		44D8496DA7F3A4922495C13B /* SortingHat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SortingHat; path = .; sourceTree = SOURCE_ROOT; };
 		47521A9F025FA497A89BCEA8 /* SortingHatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortingHatApp.swift; sourceTree = "<group>"; };
+		5877424082F407D420F5A0B0 /* RulePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulePreviewView.swift; sourceTree = "<group>"; };
 		60D0A89FFA32378E1092BFB0 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		698A482A0EAAA4043EBF9D97 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		6DB89D36D529A5AFAC90D510 /* Sparkle.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Sparkle.xcframework; path = .build/sparkle/2.9.2/Sparkle.xcframework; sourceTree = "<group>"; };
@@ -275,6 +278,7 @@
 				698A482A0EAAA4043EBF9D97 /* DashboardView.swift */,
 				79D9589A55D599EC62EC61FB /* ModelSettingsView.swift */,
 				D732DC01AE240AE483F423D6 /* ReviewQueueView.swift */,
+				5877424082F407D420F5A0B0 /* RulePreviewView.swift */,
 				CF783C14FBCE3B3B969A8140 /* RulesEditorView.swift */,
 				C24EBAF0EB6D03C27BC24A53 /* SetupView.swift */,
 				149915F7FA55267F8FBC9713 /* SortingHatTheme.swift */,
@@ -431,6 +435,7 @@
 				1075DF6EF3C2B7E879D45496 /* ReviewQueueView.swift in Sources */,
 				3C98729FE9B61131E860AC67 /* RulePlan.swift in Sources */,
 				37ECE3C90C9DC861415275D9 /* RulePlanGenerator.swift in Sources */,
+				D74B53C19471B7E723F89DDD /* RulePreviewView.swift in Sources */,
 				82E4494350ABBB746C7EEBED /* RulesEditorView.swift in Sources */,
 				F39D70455D9C7C813E5125ED /* SetupView.swift in Sources */,
 				E19A1580814AC46E0FD700F1 /* SortingHatApp.swift in Sources */,
@@ -459,6 +464,7 @@
 				7E09322D12015749C4E644B5 /* ReviewQueueView.swift in Sources */,
 				9DE7B839DC241D1700413358 /* RulePlan.swift in Sources */,
 				8C3A3A275FDBBD8377D9A24A /* RulePlanGenerator.swift in Sources */,
+				48E0E24F0F8E56CC0A895839 /* RulePreviewView.swift in Sources */,
 				4713A63024C00F015B0B1A9E /* RulesEditorView.swift in Sources */,
 				76BAE53C12CE3E5355EE24C1 /* SetupView.swift in Sources */,
 				F561C347AEA77DF01A28C3C5 /* SortingHatApp.swift in Sources */,

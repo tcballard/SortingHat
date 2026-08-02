@@ -159,17 +159,63 @@ final class HatStore {
     }
     func loadRules() throws -> [String] { try ConfigLoader.load(configURL).rules }
 
-    func saveRules(_ rules: [String]) throws {
-        let cleaned = rules.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        guard !cleaned.isEmpty else { throw HatError.invalidConfig("add at least one rule") }
-        guard cleaned.allSatisfy({ !$0.contains("\n") && !$0.contains("\r") }) else {
-            throw HatError.invalidConfig("each rule must fit on one line")
+    func inspectRules(_ rules: [String]) -> RuleSetInspection {
+        RuleSetInspector.inspect(rules)
+    }
+
+    func preview(rules: [String], files: [URL], output: URL? = nil) async throws -> [FilingPreview] {
+        let cleaned = Self.cleanedRules(rules)
+        try RuleSetInspector.validate(cleaned)
+        guard !files.isEmpty else { throw HatError.invalidConfig("choose at least one file to preview") }
+        guard files.count <= 8 else { throw HatError.invalidConfig("preview up to 8 representative files at a time") }
+        guard files.allSatisfy({ (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }) else {
+            throw HatError.invalidConfig("preview accepts files, not folders")
         }
-        _ = try RoutingDecisionResolver.descriptors(for: cleaned)
+
+        let loadedConfig = try ConfigLoader.load(configURL)
+        #if SORTING_HAT_APP_STORE
+        let config = LocalOnlyProviderPolicy.normalized(loadedConfig)
+        let openAIKey = ""
+        #else
+        let config = loadedConfig
+        let openAIKey = APIKeyStore.load()
+        #endif
+        let analyzer: any FileAnalyzing = PreferredAnalyzer(
+            ollamaURL: config.ollamaURL,
+            ollamaModel: config.ollamaModel,
+            openAIModel: config.openAIModel,
+            openAIKey: openAIKey,
+            provider: config.modelProvider,
+            appleModel: config.appleModel == .pcc ? .system : config.appleModel,
+            appleUseCase: config.appleUseCase,
+            appleGuardrails: config.appleGuardrails
+        )
+        let configuredInbox = Self.expandedURL(config.inbox)
+        let previewOutput = output?.standardizedFileURL ?? Self.expandedURL(config.output)
+        let scopedURLs = files.filter { $0.startAccessingSecurityScopedResource() }
+        defer { scopedURLs.forEach { $0.stopAccessingSecurityScopedResource() } }
+
+        return await Task.detached(priority: .userInitiated) {
+            Organizer(
+                inbox: configuredInbox,
+                output: previewOutput,
+                rules: cleaned,
+                analyzer: analyzer
+            ).previewAll(files)
+        }.value
+    }
+
+    func saveRules(_ rules: [String]) throws {
+        let cleaned = Self.cleanedRules(rules)
+        try RuleSetInspector.validate(cleaned)
         var config = try ConfigLoader.load(configURL)
         config.rules = cleaned
         try ConfigLoader.save(config, to: configURL)
         status = isWatching ? "Watching the Inbox" : "Rules Updated"
+    }
+
+    private static func cleanedRules(_ rules: [String]) -> [String] {
+        rules.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 
     func completeSetup(with plan: RulePlan) throws {

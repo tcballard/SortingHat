@@ -1,4 +1,6 @@
+import SortingHatCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RulesEditorView: View {
     let store: HatStore
@@ -6,6 +8,11 @@ struct RulesEditorView: View {
     @State private var errorMessage: String?
     @State private var hasChanges = false
     @State private var showingBuilder = false
+    @State private var choosingPreviewFiles = false
+    @State private var previewRequest: RulePreviewRequest?
+
+    private var ruleTexts: [String] { rules.map(\.text) }
+    private var inspection: RuleSetInspection { store.inspectRules(ruleTexts) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -64,17 +71,25 @@ struct RulesEditorView: View {
                         .foregroundStyle(.red)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityLabel("Error: \(errorMessage)")
+                } else if let issue = inspection.issues.first {
+                    Label(issue.message, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityLabel("Rules cannot be saved. \(issue.message)")
                 }
 
                 HStack {
                     Button("Add Rule", systemImage: "plus") { addRule() }
+                    Button("Preview Rules…", systemImage: "eye") { choosingPreviewFiles = true }
+                        .disabled(!inspection.canActivate)
+                        .help("Choose up to 8 representative files. Preview never moves or tags them.")
                     Spacer()
                     Button("Revert") { load() }
                         .disabled(!hasChanges)
                     Button("Save Rules") { save() }
                         .keyboardShortcut(.defaultAction)
                         .buttonStyle(.borderedProminent)
-                        .disabled(!hasChanges)
+                        .disabled(!hasChanges || !inspection.canActivate)
                 }
             }
             .padding(14)
@@ -87,6 +102,25 @@ struct RulesEditorView: View {
                 hasChanges = true
                 showingBuilder = false
             }
+        }
+        .fileImporter(
+            isPresented: $choosingPreviewFiles,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let files):
+                guard !files.isEmpty, files.count <= 8 else {
+                    errorMessage = "Choose between 1 and 8 representative files."
+                    return
+                }
+                previewRequest = RulePreviewRequest(rules: ruleTexts, files: files, output: store.outputRoot)
+            case .failure(let error):
+                errorMessage = error.localizedDescription
+            }
+        }
+        .sheet(item: $previewRequest) { request in
+            RulePreviewSheet(store: store, request: request)
         }
     }
 
@@ -115,17 +149,20 @@ struct RulesEditorView: View {
     private func addRule() {
         rules.append(RuleDraft(text: ""))
         hasChanges = true
+        errorMessage = nil
     }
 
     private func removeRule(_ id: RuleDraft.ID) {
         rules.removeAll { $0.id == id }
         hasChanges = true
+        errorMessage = nil
     }
 
     private func moveRule(from source: Int, to destination: Int) {
         let rule = rules.remove(at: source)
         rules.insert(rule, at: destination)
         hasChanges = true
+        errorMessage = nil
     }
 
     private func load() {
