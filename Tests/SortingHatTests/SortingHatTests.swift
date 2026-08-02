@@ -2128,4 +2128,72 @@ struct SortingHatTests {
         #expect(inspection.descriptors.count == 3)
         try RuleSetInspector.validate(rules)
     }
+
+    @Test func correctionProposalInsertsOnlyOneRuleBeforeCatchAll() throws {
+        let rules = [
+            "Give every file a descriptive filename.",
+            "Put screenshots in Screenshots/{project}/{year-month}.",
+            "Put everything else in Files/YYYY-MM.",
+        ]
+        let proposal = "Put receipts in Finance/Receipts/{merchant}/{year}, rename them using YYYY-MM-DD-merchant-description, and tag them receipt."
+
+        let assessment = RuleProposalPlanner.assess(proposedRule: proposal, existingRules: rules)
+
+        #expect(assessment.canAdd)
+        #expect(assessment.insertionIndex == 2)
+        #expect(assessment.candidateRules == [rules[0], rules[1], proposal, rules[2]])
+        let descriptor = try #require(RoutingDecisionResolver.descriptors(for: [proposal]).first)
+        #expect(descriptor.destinationTemplate == "Finance/Receipts/{merchant}/{year}")
+        #expect(descriptor.staticTags == ["receipt"])
+    }
+
+    @Test func correctionProposalBlocksDuplicateAndSameSubjectConflict() {
+        let rules = [
+            "Give every file a descriptive filename.",
+            "Put receipts in Finance/Receipts/{merchant}/{year}.",
+            "Put everything else in Files/YYYY-MM.",
+        ]
+
+        let duplicate = RuleProposalPlanner.assess(proposedRule: rules[1], existingRules: rules)
+        let conflicting = RuleProposalPlanner.assess(
+            proposedRule: "Put receipts in Purchases/{merchant}/{year}.",
+            existingRules: rules
+        )
+
+        #expect(!duplicate.canAdd)
+        #expect(duplicate.issues.contains { $0.kind == .duplicate || $0.kind == .conflicting })
+        #expect(!conflicting.canAdd)
+        #expect(conflicting.issues.contains { $0.kind == .conflicting })
+    }
+
+    @Test func correctionProposalWarnsAboutBroaderOrNarrowerOverlap() {
+        let rules = [
+            "Put business receipts in Finance/Receipts/{merchant}/{year}.",
+            "Put everything else in Files/YYYY-MM.",
+        ]
+
+        let assessment = RuleProposalPlanner.assess(
+            proposedRule: "Put receipts in Receipts/{merchant}/{year}.",
+            existingRules: rules
+        )
+
+        #expect(assessment.canAdd)
+        #expect(assessment.overlaps.count == 1)
+        #expect(assessment.overlaps[0].existingRuleIndex == 0)
+    }
+
+    @Test func correctionProposalCannotAddAnotherCatchAll() {
+        let rules = [
+            "Put receipts in Receipts/{merchant}/{year}.",
+            "Put everything else in Files/YYYY-MM.",
+        ]
+
+        let assessment = RuleProposalPlanner.assess(
+            proposedRule: "Put anything else in Archive/YYYY-MM.",
+            existingRules: rules
+        )
+
+        #expect(!assessment.canAdd)
+        #expect(assessment.issues.contains { $0.kind == .invalid || $0.kind == .conflicting })
+    }
 }

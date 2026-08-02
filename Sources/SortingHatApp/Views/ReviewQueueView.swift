@@ -5,8 +5,8 @@ struct ReviewQueueView: View {
     @State private var selection: Activity.ID?
     @State private var filedName = ""
     @State private var destination = ""
-    @State private var teachingRule = ""
     @State private var errorMessage: String?
+    @State private var correctionProposal: CorrectionContext?
 
     private var items: [Activity] { store.recent.filter { $0.outcome == .needsReview } }
     private var selected: Activity? { items.first { $0.id == selection } ?? items.first }
@@ -32,8 +32,9 @@ struct ReviewQueueView: View {
                     Section("Correct the decision") {
                         TextField("Filed name", text: $filedName, prompt: Text(selected.sourceName))
                         TextField("Destination", text: $destination, prompt: Text("Documents/2026"))
-                        TextField("Teach the hat (optional)", text: $teachingRule,
-                                  prompt: Text("Put bank statements in Finance/Statements/YYYY"), axis: .vertical)
+                        Text("Filing this correction will not change your rules. Afterwards, the hat can propose a reusable rule for you to inspect.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
                     }
                     if let errorMessage { Label(errorMessage, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red) }
                     HStack {
@@ -52,17 +53,22 @@ struct ReviewQueueView: View {
                                        description: Text("Uncertain files will appear here instead of being moved."))
             }
         }
+        .sheet(item: $correctionProposal) { correction in
+            CorrectionProposalSheet(store: store, correction: correction)
+        }
     }
 
     private func prepare(_ activity: Activity) {
         filedName = activity.sourceName
         destination = ""
-        teachingRule = ""
         errorMessage = nil
     }
 
     private func resolve(_ activity: Activity) {
-        do { try store.resolve(activity, filedName: filedName, destination: destination, teachingRule: teachingRule); selection = nil }
+        do {
+            correctionProposal = try store.resolve(activity, filedName: filedName, destination: destination)
+            selection = nil
+        }
         catch { errorMessage = error.localizedDescription }
     }
 }

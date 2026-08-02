@@ -469,6 +469,13 @@ private struct ActivityDetailView: View {
                 .lineLimit(3)
                 .help(activity.detail)
 
+            if let correction = activity.correctionProposal {
+                Label(correction.summary, systemImage: correction.disposition == .discarded ? "xmark.circle" : "text.badge.checkmark")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help(correction.rule ?? correction.summary)
+            }
+
             HStack(spacing: 6) {
                 if !activity.tags.isEmpty {
                     Text("Tags").font(.caption).foregroundStyle(.secondary)
