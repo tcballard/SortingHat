@@ -35,14 +35,82 @@ public enum AppleGuardrails: String, CaseIterable, Sendable {
     case permissiveContentTransformations = "permissive-content-transformations"
 }
 
+public enum DestinationVariable: String, Codable, CaseIterable, Sendable {
+    case merchant
+    case client
+    case project
+    case sourceApp = "source-app"
+    case year
+    case month
+    case yearMonth = "year-month"
+}
+
+public struct DestinationValue: Codable, Equatable, Sendable {
+    public let variable: DestinationVariable
+    public let value: String
+
+    public init(variable: DestinationVariable, value: String) {
+        self.variable = variable
+        self.value = value
+    }
+}
+
 public struct Decision: Codable, Equatable, Sendable {
     public let filename: String
     public let folder: String
     public let tags: [String]
     public let reason: String
-    public init(filename: String, folder: String, tags: [String], reason: String) {
-        self.filename = filename; self.folder = folder; self.tags = tags; self.reason = reason
+    public let matchedRuleID: String?
+    public let destinationValues: [DestinationValue]
+
+    public init(
+        filename: String,
+        folder: String,
+        tags: [String],
+        reason: String,
+        matchedRuleID: String? = nil,
+        destinationValues: [DestinationValue] = []
+    ) {
+        self.filename = filename
+        self.folder = folder
+        self.tags = tags
+        self.reason = reason
+        self.matchedRuleID = matchedRuleID?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        self.destinationValues = destinationValues
     }
+
+    enum CodingKeys: String, CodingKey {
+        case filename, folder, tags, reason
+        case matchedRuleID = "matched_rule_id"
+        case destinationValues = "destination_values"
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        filename = try values.decode(String.self, forKey: .filename)
+        folder = try values.decode(String.self, forKey: .folder)
+        tags = try values.decode([String].self, forKey: .tags)
+        reason = try values.decode(String.self, forKey: .reason)
+        matchedRuleID = try values.decodeIfPresent(String.self, forKey: .matchedRuleID)?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        destinationValues = try values.decodeIfPresent([DestinationValue].self, forKey: .destinationValues) ?? []
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(filename, forKey: .filename)
+        try values.encode(folder, forKey: .folder)
+        try values.encode(tags, forKey: .tags)
+        try values.encode(reason, forKey: .reason)
+        try values.encodeIfPresent(matchedRuleID, forKey: .matchedRuleID)
+        if !destinationValues.isEmpty {
+            try values.encode(destinationValues, forKey: .destinationValues)
+        }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 public struct PlannedMove: Equatable, Sendable {

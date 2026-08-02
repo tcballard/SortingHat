@@ -54,31 +54,35 @@ enum SortingHatCLI {
         }
         let config = try ConfigLoader.load(URL(fileURLWithPath: configPath))
         let manifest = try LiveEvaluator.loadManifest(at: corpusURL)
+        let requestedReferenceDate = try value(after: "--reference-date", in: args).map(parseReferenceDate)
+        let effectiveReferenceDate = requestedReferenceDate ?? .now
         let model = config.appleModel == .automatic ? AppleModelSelection.system : config.appleModel
         let analyzer: any FileAnalyzing
         let promptVersion: String
         if model == .system {
             analyzer = NativeFoundationModelsAnalyzer(
                 useCase: config.appleUseCase,
-                guardrails: config.appleGuardrails
+                guardrails: config.appleGuardrails,
+                referenceDate: effectiveReferenceDate
             )
             promptVersion = NativeFoundationModelsAnalyzer.promptVersion
         } else {
             analyzer = FMAnalyzer(executable: fmPath(), model: model, useCase: config.appleUseCase,
-                                  guardrails: config.appleGuardrails, pccAllowed: config.allowApplePCC)
+                                  guardrails: config.appleGuardrails, pccAllowed: config.allowApplePCC,
+                                  referenceDate: effectiveReferenceDate)
             promptVersion = FMAnalyzer.promptVersion
         }
         let configuration = EvaluationConfiguration(model: model.rawValue, useCase: config.appleUseCase.rawValue,
             guardrails: config.appleGuardrails.rawValue, pccAllowed: config.allowApplePCC,
             promptVersion: promptVersion, operatingSystem: ProcessInfo.processInfo.operatingSystemVersionString,
-            routingPolicyVersion: RoutingDecisionResolver.version)
+            routingPolicyVersion: RoutingDecisionResolver.version, referenceDate: requestedReferenceDate)
         let baseline: EvaluationArtifact?
         if let path = value(after: "--baseline", in: args) {
             let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
             baseline = try decoder.decode(EvaluationArtifact.self, from: Data(contentsOf: URL(fileURLWithPath: NSString(string: path).expandingTildeInPath)))
         } else { baseline = nil }
         let artifact = LiveEvaluator.run(manifest: manifest, corpusRoot: corpusRoot, analyzer: analyzer,
-                                         configuration: configuration, baseline: baseline)
+                                         configuration: configuration, baseline: baseline, referenceDate: requestedReferenceDate)
         try LiveEvaluator.write(artifact, to: outputURL)
         print(LiveEvaluator.summary(artifact))
         if !artifact.thresholdFailures.isEmpty || !artifact.regressions.isEmpty { exit(2) }
@@ -120,6 +124,15 @@ enum SortingHatCLI {
         return args[index + 1]
     }
 
+    static func parseReferenceDate(_ value: String) throws -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        guard let date = formatter.date(from: value), formatter.string(from: date) == value else {
+            throw HatError.invalidConfig("--reference-date must use YYYY-MM-DD")
+        }
+        return date
+    }
+
     static func writeExample(to url: URL) throws {
         guard !FileManager.default.fileExists(atPath: url.path) else { throw CocoaError(.fileWriteFileExists) }
         try example.write(to: url, atomically: true, encoding: .utf8)
@@ -155,7 +168,7 @@ enum SortingHatCLI {
           sorting-hat init [--config PATH]
           sorting-hat once [--config PATH] [--dry-run]
           sorting-hat watch [--config PATH] [--dry-run]
-          sorting-hat evaluate --live --corpus PATH --output PATH [--baseline PATH] [--config PATH]
+          sorting-hat evaluate --live --corpus PATH --output PATH [--reference-date YYYY-MM-DD] [--baseline PATH] [--config PATH]
         """)
     }
 }

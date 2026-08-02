@@ -1,4 +1,5 @@
 import Foundation
+import SortingHatCore
 
 struct RulePlan: Codable, Equatable, Sendable {
     var summary: String
@@ -47,6 +48,11 @@ enum RulePlanValidator {
                   folder.caseInsensitiveCompare("Sorted") != .orderedSame,
                   !folder.lowercased().hasPrefix("sorted/") else {
                 throw RulePlanError.invalid("Give \(route.name) a meaningful destination instead of a generic holding folder.")
+            }
+            do {
+                try RoutingDecisionResolver.validateDestinationTemplate(folder)
+            } catch {
+                throw RulePlanError.invalid("\(route.name) has an unsupported destination. \(error.localizedDescription)")
             }
         }
         guard !plan.fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

@@ -164,6 +164,8 @@ struct SortingHatTests {
             "folder": "Receipts/2026",
             "tags": ["receipt", "tesco"],
             "reason": "The document contains a Tesco total and transaction date",
+            "matchedRuleID": "",
+            "destinationValues": [GeneratedContent](),
         ])
 
         let decision = try NativeFoundationModelsAnalyzer.decision(from: content)
@@ -209,6 +211,58 @@ struct SortingHatTests {
         #expect(!artifact.results[2].tagsCorrect)
         #expect(try Data(contentsOf: receipt) == originalReceipt)
         #expect(FileManager.default.fileExists(atPath: unsafe.path))
+    }
+
+    @Test func liveEvaluationUsesAndRecordsPinnedReferenceDate() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "Project planning notes".write(
+            to: root.appending(path: "note.txt"), atomically: true, encoding: .utf8
+        )
+        let rules = ["Put everything else in Files/YYYY-MM."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let analyzer = StubAnalyzer(decision: Decision(
+            filename: "project-planning-notes.txt",
+            folder: "",
+            tags: ["planning"],
+            reason: "Recognizable planning notes",
+            matchedRuleID: route.id
+        ))
+        let manifest = EvaluationManifest(
+            version: 1,
+            name: "pinned-clock",
+            rules: rules,
+            cases: [EvaluationCase(
+                id: "note",
+                path: "note.txt",
+                kind: "text",
+                expected: ExpectedDecision(
+                    folders: ["Files/2026-07"],
+                    filenameContains: ["planning"],
+                    tags: ["planning"],
+                    abstain: false
+                )
+            )],
+            thresholds: nil
+        )
+        let referenceDate = try #require(ISO8601DateFormatter().date(from: "2026-07-19T12:00:00Z"))
+        let configuration = EvaluationConfiguration(
+            model: "stub", useCase: "general", guardrails: "default",
+            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS"
+        )
+
+        let artifact = LiveEvaluator.run(
+            manifest: manifest,
+            corpusRoot: root,
+            analyzer: analyzer,
+            configuration: configuration,
+            referenceDate: referenceDate
+        )
+
+        #expect(artifact.metrics.accuracy == 1)
+        #expect(artifact.results.first?.decision?.folder == "Files/2026-07")
+        #expect(artifact.configuration.referenceDate == referenceDate)
+        #expect(LiveEvaluator.summary(artifact).contains("Reference date: 2026-07-19"))
     }
 
     @Test func liveEvaluationWritesMachineAndHumanReadableRegressionArtifacts() throws {
@@ -728,6 +782,304 @@ struct SortingHatTests {
         #expect(route.canonicalFolder(for: "client files/årsrapporter/2026") == "Client Files/Årsrapporter/2026")
         #expect(route.sourceMatchScore(for: URL(fileURLWithPath: "/tmp/report.pdf")) == 0)
         #expect(catchAll.isCatchAll)
+    }
+
+    @Test func assignsStableRuleIdentifiersAndDeclaresDestinationVariables() throws {
+        let receiptRule = "Put receipts in Finance/Receipts/{merchant}/{year} and tag them receipt."
+        let screenshotRule = "Put screenshots in Screenshots/{project}/{year-month}."
+
+        let forward = try RoutingDecisionResolver.descriptors(for: [receiptRule, screenshotRule])
+        let reversed = try RoutingDecisionResolver.descriptors(for: [screenshotRule, receiptRule])
+        let receipt = try #require(forward.first(where: { $0.subject == "receipts" }))
+        let sameReceipt = try #require(reversed.first(where: { $0.subject == "receipts" }))
+
+        #expect(receipt.id == sameReceipt.id)
+        #expect(receipt.id.hasPrefix("route-"))
+        #expect(receipt.variables == [.merchant, .year])
+        #expect(receipt.staticTags == ["receipt"])
+    }
+
+    @Test func rendersStructuredDestinationFromNormalizedSlotValues() throws {
+        let file = URL(fileURLWithPath: "/tmp/Northstar Receipt.PDF")
+        let rules = ["Put receipts in Finance/Receipts/{merchant}/{year} and tag them receipt."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let decision = Decision(
+            filename: "northstar-receipt.pdf",
+            folder: "ignored/model/owned/path",
+            tags: ["coffee"],
+            reason: "Merchant and transaction year are visible on the receipt",
+            matchedRuleID: route.id,
+            destinationValues: [
+                DestinationValue(variable: .merchant, value: "  Northstar   Coffee  "),
+                DestinationValue(variable: .year, value: "2026"),
+            ]
+        )
+
+        let resolved = try RoutingDecisionResolver.resolve(file: file, decision: decision, rules: rules)
+
+        #expect(resolved.filename == "northstar-receipt.pdf")
+        #expect(resolved.folder == "Finance/Receipts/Northstar Coffee/2026")
+        #expect(resolved.tags == ["coffee", "receipt"])
+        #expect(resolved.matchedRuleID == route.id)
+        #expect(resolved.destinationValues == [
+            DestinationValue(variable: .merchant, value: "Northstar Coffee"),
+            DestinationValue(variable: .year, value: "2026"),
+        ])
+    }
+
+    @Test func rendersProjectScreenshotDestinationWhenProjectIsIdentifiable() throws {
+        let file = URL(fileURLWithPath: "/tmp/Screenshot 2026-08-02.png")
+        let rules = ["Put screenshots in Screenshots/{project}/{year-month} and tag them screenshot."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let decision = Decision(
+            filename: "aurora-settings.png",
+            folder: "",
+            tags: [],
+            reason: "The screenshot shows the Aurora settings screen",
+            matchedRuleID: route.id,
+            destinationValues: [
+                .init(variable: .project, value: "Project Aurora"),
+                .init(variable: .yearMonth, value: "2026-08"),
+            ]
+        )
+
+        let resolved = try RoutingDecisionResolver.resolve(file: file, decision: decision, rules: rules)
+
+        #expect(resolved.folder == "Screenshots/Project Aurora/2026-08")
+        #expect(resolved.tags == ["screenshot"])
+    }
+
+    @Test func matchedLegacyDateRouteNeedsNoModelSuppliedDateSlot() throws {
+        let file = URL(fileURLWithPath: "/tmp/screenshot.png")
+        let rules = ["Put screenshots in Screenshots/YYYY-MM and tag them screenshot."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let referenceDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(
+            year: 2026, month: 8, day: 2
+        )))
+        let decision = Decision(
+            filename: "aurora-settings.png",
+            folder: "",
+            tags: [],
+            reason: "A project settings screenshot",
+            matchedRuleID: route.id,
+            destinationValues: []
+        )
+
+        let resolved = try RoutingDecisionResolver.resolve(
+            file: file, decision: decision, rules: rules, referenceDate: referenceDate
+        )
+
+        #expect(route.variables.isEmpty)
+        #expect(resolved.folder == "Screenshots/2026-08")
+        #expect(resolved.tags == ["screenshot"])
+    }
+
+    @Test func obviousSourceRouteOverridesStructuredCatchAllSelection() throws {
+        let file = URL(fileURLWithPath: "/tmp/Screenshot 42.png")
+        let rules = [
+            "Put screenshots in Screenshots/YYYY-MM and tag them screenshot.",
+            "Put everything else in Files/YYYY-MM.",
+        ]
+        let routes = try RoutingDecisionResolver.descriptors(for: rules)
+        let catchAll = try #require(routes.first(where: { $0.isCatchAll }))
+        let referenceDate = try #require(Calendar(identifier: .gregorian).date(from: DateComponents(
+            year: 2026, month: 8, day: 2
+        )))
+        let decision = Decision(
+            filename: "sorting-hat-settings.png",
+            folder: "Files/2026-08",
+            tags: ["settings"],
+            reason: "A recognizable settings screenshot",
+            matchedRuleID: catchAll.id
+        )
+
+        let resolved = try RoutingDecisionResolver.resolve(
+            file: file, decision: decision, rules: rules, referenceDate: referenceDate
+        )
+
+        #expect(resolved.folder == "Screenshots/2026-08")
+        #expect(resolved.tags == ["settings", "screenshot"])
+        #expect(resolved.matchedRuleID == routes[0].id)
+    }
+
+    @Test func holdsMissingOrUnidentifiedStructuredValuesForReview() throws {
+        let file = URL(fileURLWithPath: "/tmp/screenshot.png")
+        let rules = ["Put screenshots in Screenshots/{project}/{year-month}."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let missing = Decision(
+            filename: "settings.png",
+            folder: "",
+            tags: [],
+            reason: "A settings screen",
+            matchedRuleID: route.id,
+            destinationValues: [.init(variable: .yearMonth, value: "2026-08")]
+        )
+        let unidentified = Decision(
+            filename: "settings.png",
+            folder: "",
+            tags: [],
+            reason: "Project is unclear",
+            matchedRuleID: route.id,
+            destinationValues: [
+                .init(variable: .project, value: "unknown"),
+                .init(variable: .yearMonth, value: "2026-08"),
+            ]
+        )
+        let empty = Decision(
+            filename: "settings.png",
+            folder: "",
+            tags: [],
+            reason: "Project value is empty",
+            matchedRuleID: route.id,
+            destinationValues: [
+                .init(variable: .project, value: "   "),
+                .init(variable: .yearMonth, value: "2026-08"),
+            ]
+        )
+
+        let missingResult = try RoutingDecisionResolver.resolve(file: file, decision: missing, rules: rules)
+        let unidentifiedResult = try RoutingDecisionResolver.resolve(file: file, decision: unidentified, rules: rules)
+        let emptyResult = try RoutingDecisionResolver.resolve(file: file, decision: empty, rules: rules)
+
+        #expect(missingResult.folder == "")
+        #expect(missingResult.reason.contains("Needs review"))
+        #expect(unidentifiedResult.folder == "")
+        #expect(unidentifiedResult.reason.contains("confidently"))
+        #expect(emptyResult.folder == "")
+        #expect(emptyResult.reason.contains("confidently"))
+    }
+
+    @Test func rejectsUnsafeDuplicateAndUndeclaredStructuredValues() throws {
+        let file = URL(fileURLWithPath: "/tmp/receipt.pdf")
+        let rules = ["Put receipts in Receipts/{merchant}/{year}."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let unsafe = Decision(
+            filename: "receipt.pdf", folder: "", tags: [], reason: "receipt",
+            matchedRuleID: route.id,
+            destinationValues: [
+                .init(variable: .merchant, value: "../../Escape"),
+                .init(variable: .year, value: "2026"),
+            ]
+        )
+        let duplicate = Decision(
+            filename: "receipt.pdf", folder: "", tags: [], reason: "receipt",
+            matchedRuleID: route.id,
+            destinationValues: [
+                .init(variable: .merchant, value: "Acme"),
+                .init(variable: .merchant, value: "Northstar"),
+                .init(variable: .year, value: "2026"),
+            ]
+        )
+        let undeclared = Decision(
+            filename: "receipt.pdf", folder: "", tags: [], reason: "receipt",
+            matchedRuleID: route.id,
+            destinationValues: [
+                .init(variable: .merchant, value: "Acme"),
+                .init(variable: .year, value: "2026"),
+                .init(variable: .project, value: "Aurora"),
+            ]
+        )
+
+        #expect(throws: HatError.self) { try RoutingDecisionResolver.resolve(file: file, decision: unsafe, rules: rules) }
+        #expect(throws: HatError.self) { try RoutingDecisionResolver.resolve(file: file, decision: duplicate, rules: rules) }
+        #expect(throws: HatError.self) { try RoutingDecisionResolver.resolve(file: file, decision: undeclared, rules: rules) }
+    }
+
+    @Test func neverRendersPathShapedStructuredValues() throws {
+        let file = URL(fileURLWithPath: "/tmp/receipt.pdf")
+        let rules = ["Put receipts in Receipts/{merchant}/{year}."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let unsafeValues = ["Acme/Invoices", "Acme\\Invoices", "~", ".", "..", "{merchant}", "Acme:Invoices"]
+
+        for value in unsafeValues {
+            let decision = Decision(
+                filename: "receipt.pdf", folder: "", tags: [], reason: "receipt",
+                matchedRuleID: route.id,
+                destinationValues: [
+                    .init(variable: .merchant, value: value),
+                    .init(variable: .year, value: "2026"),
+                ]
+            )
+            #expect(throws: HatError.self) {
+                try RoutingDecisionResolver.resolve(file: file, decision: decision, rules: rules)
+            }
+        }
+    }
+
+    @Test func validatesOnlySupportedWholeComponentDestinationVariables() throws {
+        try RoutingDecisionResolver.validateDestinationTemplate(
+            "Clients/{client}/{project}/{source-app}/{year}/{month}/{year-month}"
+        )
+
+        #expect(throws: HatError.self) {
+            try RoutingDecisionResolver.validateDestinationTemplate("Clients/{source}")
+        }
+        #expect(throws: HatError.self) {
+            try RoutingDecisionResolver.validateDestinationTemplate("Clients/client-{client}")
+        }
+    }
+
+    @Test func legacyDecisionJSONDecodesWithoutStructuredRoutingMetadata() throws {
+        let data = Data(#"{"filename":"receipt.pdf","folder":"Receipts/2026","tags":["receipt"],"reason":"legacy"}"#.utf8)
+
+        let decision = try JSONDecoder().decode(Decision.self, from: data)
+
+        #expect(decision.matchedRuleID == nil)
+        #expect(decision.destinationValues.isEmpty)
+    }
+
+    @Test func shippingEvaluationAcceptsStructuredDestinationWithoutUnsafeDecisions() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "Northstar Coffee total GBP 4.20, 2 August 2026".write(
+            to: root.appending(path: "receipt.txt"), atomically: true, encoding: .utf8
+        )
+        let rules = ["Put receipts in Receipts/{merchant}/{year} and tag them receipt."]
+        let route = try #require(RoutingDecisionResolver.descriptors(for: rules).first)
+        let analyzer = StubAnalyzer(decision: Decision(
+            filename: "northstar-coffee-receipt.txt",
+            folder: "",
+            tags: ["coffee"],
+            reason: "Merchant and year are explicit",
+            matchedRuleID: route.id,
+            destinationValues: [
+                .init(variable: .merchant, value: "Northstar Coffee"),
+                .init(variable: .year, value: "2026"),
+            ]
+        ))
+        let manifest = EvaluationManifest(
+            version: 1,
+            name: "structured-routing",
+            rules: rules,
+            cases: [EvaluationCase(
+                id: "receipt",
+                path: "receipt.txt",
+                kind: "receipt",
+                expected: ExpectedDecision(
+                    folders: ["Receipts/Northstar Coffee/2026"],
+                    filenameContains: ["northstar", "receipt"],
+                    tags: ["receipt"],
+                    abstain: false
+                )
+            )],
+            thresholds: EvaluationThresholds(
+                minimumAccuracy: 1,
+                maximumGenerationFailureRate: 0,
+                maximumUnsafeDecisionRate: 0
+            )
+        )
+        let configuration = EvaluationConfiguration(
+            model: "stub", useCase: "general", guardrails: "default",
+            pccAllowed: false, promptVersion: "test", operatingSystem: "testOS"
+        )
+
+        let artifact = LiveEvaluator.run(
+            manifest: manifest, corpusRoot: root, analyzer: analyzer, configuration: configuration
+        )
+
+        #expect(artifact.metrics.accuracy == 1)
+        #expect(artifact.metrics.unsafeOrInvalidDecisions == 0)
+        #expect(artifact.thresholdFailures.isEmpty)
     }
 
     @Test func resolvesStrongSourceRouteCanonicalFolderExtensionAndTags() throws {
