@@ -373,7 +373,10 @@ struct CompiledRoutingRule: Equatable, Sendable {
 
         let subject = String(body[..<separator.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
         let tail = String(body[separator.upperBound...])
-        let modifierMarkers = [", organised by", ", organized by", ", and tag", " and tag", ", tag", ", and add", " and add"]
+        let modifierMarkers = [
+            ", organised by", ", organized by", ", and rename", ", rename",
+            ", and tag", " and tag", ", tag", ", and add", " and add",
+        ]
         let end = modifierMarkers.compactMap { tail.range(of: $0, options: .caseInsensitive)?.lowerBound }.min() ?? tail.endIndex
         let destination = String(tail[..<end]).trimmingCharacters(
             in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "."))

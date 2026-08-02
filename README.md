@@ -45,6 +45,8 @@ Sorting Hat watches while it is running, shows exactly how each file was renamed
 
 Before saving a new ruleset, preview it against up to eight representative files. Preview uses the same extraction, model, compiled routing, collision naming, and validation path as live filing while deliberately skipping every file move and Finder-tag write.
 
+Manual corrections are one-off decisions first: filing the corrected file never changes the ruleset. Afterwards, the on-device model can propose one reusable rule with its evidence, variables, rename policy, destination, and tags. You can edit it, preview it against real files, add it explicitly, or discard it. Duplicate, overlapping, ordering, and catch-all conflicts are surfaced before activation.
+
 ### Send to Sorting Hat from Finder
 
 Signed builds include a first-party **Send to Sorting Hat** Quick Action. Select files in Finder, then choose **Quick Actions → Send to Sorting Hat**. The action copies each file into Sorting Hat’s App Group queue. It never changes the original.

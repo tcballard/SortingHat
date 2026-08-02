@@ -163,6 +163,10 @@ final class HatStore {
         RuleSetInspector.inspect(rules)
     }
 
+    func assessProposal(_ rule: String) throws -> RuleProposalAssessment {
+        RuleProposalPlanner.assess(proposedRule: rule, existingRules: try loadRules())
+    }
+
     func preview(rules: [String], files: [URL], output: URL? = nil) async throws -> [FilingPreview] {
         let cleaned = Self.cleanedRules(rules)
         try RuleSetInspector.validate(cleaned)
@@ -327,7 +331,7 @@ final class HatStore {
         status = activity.outcome == .failed ? "Removed the error from Activity" : status
     }
 
-    func resolve(_ activity: Activity, filedName: String, destination: String, teachingRule: String?) throws {
+    func resolve(_ activity: Activity, filedName: String, destination: String) throws -> CorrectionContext {
         guard let source = activity.fileURL, FileManager.default.fileExists(atPath: source.path) else {
             throw RulePlanError.invalid("The review file is no longer in the Inbox.")
         }
@@ -347,13 +351,53 @@ final class HatStore {
         try FileManager.default.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.moveItem(at: source, to: destinationURL)
         recent.removeAll { $0.id == activity.id }
-        record(Activity(sourceName: activity.sourceName, sourceURL: source, filedName: name, destination: folder,
-                        fileURL: destinationURL, detail: "Corrected during review", outcome: .filed))
-        if let teachingRule, !teachingRule.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            var rules = try loadRules()
-            rules.insert(teachingRule.trimmingCharacters(in: .whitespacesAndNewlines), at: max(1, rules.count - 1))
-            try saveRules(rules)
+        let corrected = Activity(
+            sourceName: activity.sourceName,
+            sourceURL: source,
+            filedName: name,
+            destination: folder,
+            fileURL: destinationURL,
+            detail: "Corrected during review",
+            outcome: .filed,
+            correctionProposal: CorrectionProposalHistory(disposition: .pending, rule: nil)
+        )
+        record(corrected)
+        return CorrectionContext(
+            id: corrected.id,
+            originalName: activity.sourceName,
+            correctedName: name,
+            destination: folder,
+            fileURL: destinationURL,
+            reviewReason: activity.detail
+        )
+    }
+
+    func addCorrectionProposal(_ rule: String, generatedRule: String, for correction: CorrectionContext) throws {
+        let assessment = try assessProposal(rule)
+        guard assessment.canAdd else {
+            throw RulePlanError.invalid(assessment.issues.map(\.message).joined(separator: " "))
         }
+        try saveRules(assessment.candidateRules)
+        let disposition: CorrectionProposalDisposition = assessment.proposedRule == generatedRule
+            .trimmingCharacters(in: .whitespacesAndNewlines) ? .accepted : .edited
+        updateCorrectionHistory(
+            id: correction.id,
+            history: CorrectionProposalHistory(disposition: disposition, rule: assessment.proposedRule)
+        )
+        status = "Correction rule added"
+    }
+
+    func discardCorrectionProposal(for correction: CorrectionContext) {
+        updateCorrectionHistory(
+            id: correction.id,
+            history: CorrectionProposalHistory(disposition: .discarded, rule: nil)
+        )
+    }
+
+    private func updateCorrectionHistory(id: UUID, history: CorrectionProposalHistory) {
+        guard let index = recent.firstIndex(where: { $0.id == id }) else { return }
+        recent[index] = recent[index].withCorrectionProposal(history)
+        try? ledger.save(recent)
     }
 
     func loadModelSettings() throws -> (provider: ModelProvider, appleModel: AppleModelSelection, appleUseCase: AppleUseCase, appleGuardrails: AppleGuardrails, url: String, ollamaModel: String, openAIModel: String, openAIKey: String) {
@@ -807,6 +851,7 @@ struct Activity: Identifiable, Codable {
     let detail: String
     let outcome: Outcome
     let date: Date
+    let correctionProposal: CorrectionProposalHistory?
 
     init(
         sourceName: String,
@@ -817,9 +862,11 @@ struct Activity: Identifiable, Codable {
         tags: [String] = [],
         detail: String,
         outcome: Outcome,
-        date: Date = .now
+        date: Date = .now,
+        correctionProposal: CorrectionProposalHistory? = nil,
+        id: UUID = UUID()
     ) {
-        self.id = UUID()
+        self.id = id
         self.sourceName = sourceName
         self.sourceURL = sourceURL
         self.filedName = filedName
@@ -833,6 +880,23 @@ struct Activity: Identifiable, Codable {
         )
         self.outcome = outcome
         self.date = date
+        self.correctionProposal = correctionProposal
+    }
+
+    func withCorrectionProposal(_ proposal: CorrectionProposalHistory) -> Activity {
+        Activity(
+            sourceName: sourceName,
+            sourceURL: sourceURL,
+            filedName: filedName,
+            destination: destination,
+            fileURL: fileURL,
+            tags: tags,
+            detail: detail,
+            outcome: outcome,
+            date: date,
+            correctionProposal: proposal,
+            id: id
+        )
     }
 
     enum Outcome: String, Codable {
